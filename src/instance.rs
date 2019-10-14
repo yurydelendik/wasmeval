@@ -1,15 +1,19 @@
 use failure::{bail, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::{ExternalKind, ImportSectionEntryType};
+use wasmparser::{ExternalKind, ImportSectionEntryType, InitExpr, OperatorsReader};
 
-use crate::externals::{External, Func, Memory};
+use crate::eval::{eval_const, EvalSource};
+use crate::externals::{External, Func, Global, Memory};
 use crate::func::InstanceFunction;
+use crate::global::InstanceGlobal;
+use crate::memory::InstanceMemory;
 use crate::module::{Module, ModuleData};
 
 pub(crate) struct InstanceData<'a> {
     pub module_data: Rc<RefCell<ModuleData<'a>>>,
     pub memories: Vec<Rc<RefCell<dyn Memory>>>,
+    pub globals: Vec<Rc<RefCell<dyn Global>>>,
     pub funcs: Vec<Rc<RefCell<dyn Func + 'a>>>,
 }
 
@@ -26,6 +30,7 @@ impl<'a> Instance<'a> {
         }
         let mut memories = Vec::new();
         let mut funcs = Vec::new();
+        let mut globals = Vec::new();
         for (import, external) in module_data.borrow().imports.iter().zip(externals) {
             match import.ty {
                 ImportSectionEntryType::Function(_sig) => {
@@ -42,16 +47,47 @@ impl<'a> Instance<'a> {
                         bail!("incompatible memory import");
                     }
                 }
+                ImportSectionEntryType::Global(_gt) => {
+                    if let External::Global(g) = external {
+                        globals.push(g.clone());
+                    } else {
+                        bail!("incompatible global import");
+                    }
+                }
                 _ => bail!("unsupported import type: {:?}", import.ty),
             }
         }
         let data = Rc::new(RefCell::new(InstanceData {
             module_data: module_data.clone(),
             memories,
+            globals,
             funcs,
         }));
 
-        assert!(module_data.borrow().memories.len() == 0);
+        for m in module_data.borrow().memories.iter() {
+            let limits = &m.limits;
+            let memory = InstanceMemory::new(
+                limits.initial as usize,
+                limits.maximum.unwrap_or(65535) as usize,
+            );
+            data.borrow_mut()
+                .memories
+                .push(Rc::new(RefCell::new(memory)));
+        }
+        for g in module_data.borrow().globals.iter() {
+            struct S<'s>(&'s InitExpr<'s>);
+            impl<'s> EvalSource for S<'s> {
+                fn create_reader(&self) -> OperatorsReader {
+                    self.0.get_operators_reader()
+                }
+            }
+            let init_expr_source = S(&g.init_expr);
+            let init_val = eval_const(data.clone(), &init_expr_source);
+            let global = InstanceGlobal::new(init_val);
+            data.borrow_mut()
+                .globals
+                .push(Rc::new(RefCell::new(global)));
+        }
         for i in 0..module_data.borrow().func_types.len() {
             let f: InstanceFunction<'a> = InstanceFunction::new(data.clone(), i);
             data.borrow_mut().funcs.push(Rc::new(RefCell::new(f)));
@@ -64,7 +100,8 @@ impl<'a> Instance<'a> {
             exports.push(match export.kind {
                 ExternalKind::Function => External::Func(data.funcs[index].clone()),
                 ExternalKind::Memory => External::Memory(data.memories[index].clone()),
-                _ => bail!("unsupported external type"),
+                ExternalKind::Global => External::Global(data.globals[index].clone()),
+                ExternalKind::Table => unimplemented!(),
             });
         }
 

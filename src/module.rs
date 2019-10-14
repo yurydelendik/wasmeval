@@ -2,7 +2,9 @@ use failure::Error;
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
-use wasmparser::{Export, FuncType, FunctionBody, Import, MemoryType, ModuleReader, SectionCode};
+use wasmparser::{
+    Export, FuncType, FunctionBody, Global, Import, MemoryType, ModuleReader, SectionCode,
+};
 
 pub(crate) struct ModuleData<'a> {
     pub buf: Pin<Box<[u8]>>,
@@ -10,6 +12,7 @@ pub(crate) struct ModuleData<'a> {
     pub imports: Box<[Import<'a>]>,
     pub exports: Box<[Export<'a>]>,
     pub memories: Box<[MemoryType]>,
+    pub globals: Box<[Global<'a>]>,
     pub func_types: Box<[u32]>,
     pub func_bodies: Box<[FunctionBody<'a>]>,
 }
@@ -27,6 +30,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     let mut imports = None;
     let mut exports = None;
     let mut memories = None;
+    let mut globals = None;
     let mut func_types = None;
     let mut func_bodies = None;
     while !reader.eof() {
@@ -64,6 +68,14 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
+            SectionCode::Global => {
+                globals = Some(
+                    section
+                        .get_global_section_reader()?
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
             SectionCode::Function => {
                 func_types = Some(
                     section
@@ -87,6 +99,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     let imports = imports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let exports = exports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let memories = memories.unwrap_or_else(|| vec![]).into_boxed_slice();
+    let globals = globals.unwrap_or_else(|| vec![]).into_boxed_slice();
     let func_types = func_types.unwrap_or_else(|| vec![]).into_boxed_slice();
     let func_bodies = func_bodies.unwrap_or_else(|| vec![]).into_boxed_slice();
     Ok(ModuleData {
@@ -95,6 +108,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
         imports,
         exports,
         memories,
+        globals,
         func_types,
         func_bodies,
     })
@@ -116,6 +130,11 @@ impl<'a> Module<'a> {
     }
 
     pub fn exports(&self) -> Vec<String> {
-        vec![]
+        self.data
+            .borrow()
+            .exports
+            .iter()
+            .map(|e| e.field.to_string())
+            .collect::<Vec<_>>()
     }
 }

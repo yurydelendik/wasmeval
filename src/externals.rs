@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use wasmparser::MemoryImmediate;
 
 use crate::values::{Trap, Val};
 
@@ -9,12 +10,21 @@ pub trait Func {
     fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>>;
 }
 
-pub trait Memory {}
+pub trait Memory {
+    fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32) -> *const u8;
+    fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32) -> *mut u8;
+}
+
+pub trait Global {
+    fn content(&self) -> &Val;
+    fn content_mut(&mut self) -> &mut Val;
+}
 
 #[derive(Clone)]
 pub enum External<'a> {
     Func(Rc<RefCell<dyn Func + 'a>>),
     Memory(Rc<RefCell<dyn Memory>>),
+    Global(Rc<RefCell<dyn Global>>),
 }
 
 impl<'a> External<'a> {

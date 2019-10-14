@@ -61,6 +61,9 @@ impl<'a> Func for InstanceFunction<'a> {
         });
         let locals = {
             let mut locals = Vec::new();
+            for param in params {
+                locals.push(Local(param.clone()));
+            }
             for local in body.get_locals_reader().expect("reader").into_iter() {
                 let (count, ty) = local.expect("local def");
                 for _ in 0..count {
