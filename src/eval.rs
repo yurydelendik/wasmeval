@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 use wasmparser::{Operator, OperatorsReader};
 
@@ -31,48 +32,117 @@ pub(crate) trait EvalSource {
     fn create_reader(&self) -> OperatorsReader;
 }
 
+struct OperatorsCache<'a> {
+    operators: Vec<Operator<'a>>,
+    parents: HashMap<usize, usize>,
+    ends: Vec<(usize, usize)>,
+    loops: HashMap<usize, usize>,
+    elses: HashMap<usize, usize>,
+}
+
+impl<'a> OperatorsCache<'a> {
+    pub fn new(source: &'a dyn EvalSource) -> Self {
+        let operators = source
+            .create_reader()
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("ops");
+        let mut parents = HashMap::new();
+        let mut ends = Vec::new();
+        let mut loops = HashMap::new();
+        let mut elses = HashMap::new();
+
+        let mut control = Vec::new();
+        for i in (0..operators.len()).rev() {
+            match operators[i] {
+                Operator::End => {
+                    if let Some(&(last, _)) = control.last() {
+                        parents.insert(i, last);
+                        ends.push((i, last));
+                    }
+                    control.push((i, None));
+                }
+                Operator::Loop { .. } => {
+                    let (end, _) = control.pop().unwrap();
+                    ends.push((i, end));
+                    loops.insert(end, i);
+                }
+                Operator::Block { .. } => {
+                    let (end, _) = control.pop().unwrap();
+                    ends.push((i, end));
+                }
+                Operator::If { .. } => {
+                    let (end, maybe_else) = control.pop().unwrap();
+                    if let Some(el) = maybe_else {
+                        elses.insert(i, el);
+                    }
+                    ends.push((i, end));
+                }
+                Operator::Else => {
+                    control.last_mut().unwrap().1 = Some(i);
+                }
+                _ => (),
+            }
+        }
+
+        assert!(control.len() == 1);
+        ends.push((0, control[0].0));
+        ends.reverse();
+
+        OperatorsCache {
+            operators,
+            parents,
+            ends,
+            loops,
+            elses,
+        }
+    }
+
+    pub fn break_to(&self, from: usize, depth: u32) -> usize {
+        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
+            Ok(i) => self.ends[i].1,
+            Err(i) => self.ends[i - 1].1,
+        };
+        for i in 0..depth {
+            end = self.parents[&end];
+        }
+        (if let Some(i) = self.loops.get(&end) {
+            *i
+        } else {
+            end
+        }) + 1
+    }
+
+    pub fn len(&self) -> usize {
+        self.operators.len()
+    }
+
+    pub fn operators(&self) -> &[Operator] {
+        &self.operators
+    }
+}
+
 pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
-    let operators = source
-        .create_reader()
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("ops");
+    let cache = OperatorsCache::new(source);
+    let operators = cache.operators();
     let mut i = 0;
-    let mut control: Vec<Option<usize>> = Vec::new();
     let mut stack: Vec<Val> = context.stack.split_off(0);
 
     loop {
         let op = &operators[i];
 
         let mut goto = |relative_depth| {
-            control.truncate(control.len() - relative_depth as usize);
-            if let Some(loop_start) = control[control.len() - 1] {
-                i = loop_start + 1;
-                return;
-            }
-            let mut from = relative_depth + 1;
-            while from > 0 {
-                match operators[i] {
-                    Operator::End => from -= 1,
-                    Operator::If { .. } | Operator::Block { .. } | Operator::Loop { .. } => {
-                        from += 1
-                    }
-                    _ => (),
-                }
-                i += 1;
-            }
-            control.pop();
+            i = cache.break_to(i, relative_depth);
         };
 
         match op {
             Operator::End => {
-                if control.is_empty() {
+                if i + 1 >= cache.len() {
                     break;
                 }
-                control.pop();
             }
-            Operator::Loop { .. } => control.push(Some(i)),
-            Operator::Block { .. } => control.push(None),
+            Operator::Loop { .. } => (),
+            Operator::Block { .. } => (),
             Operator::BrIf { relative_depth } => {
                 let c = stack.pop().unwrap().i32().unwrap();
                 if c != 0 {
@@ -85,7 +155,6 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
                 continue;
             }
             Operator::Return => {
-                control.truncate(0);
                 break;
             }
 
