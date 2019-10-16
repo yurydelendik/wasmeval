@@ -6,35 +6,21 @@ use crate::instance::InstanceData;
 use crate::values::Val;
 
 pub(crate) use bytecode::{BytecodeCache, EvalSource, Operator};
+pub(crate) use context::{EvalContext, Frame, Local};
 
 mod bytecode;
+mod context;
 
-pub struct Local(pub Val);
-
-pub(crate) struct EvalContext<'a> {
-    pub instance_data: Rc<RefCell<InstanceData<'a>>>,
-    pub locals: Vec<Local>,
-    pub stack: Vec<Val>,
-}
-
-impl<'a> EvalContext<'a> {
-    fn get_function(&self, index: u32) -> Rc<RefCell<dyn Func + 'a>> {
-        self.instance_data.borrow().funcs[index as usize].clone()
-    }
-    fn get_global(&self, index: u32) -> Rc<RefCell<dyn Global>> {
-        self.instance_data.borrow().globals[index as usize].clone()
-    }
-    fn get_memory(&self) -> Rc<RefCell<dyn Memory>> {
-        const INDEX: usize = 0;
-        self.instance_data.borrow().memories[INDEX].clone()
-    }
-}
-
-pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
+pub(crate) fn eval<'a>(
+    context: &'a mut EvalContext,
+    source: &dyn EvalSource,
+    locals: Vec<Local>,
+) -> Vec<Val> {
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
-    let mut stack: Vec<Val> = context.stack.split_off(0);
+    let mut frame = Frame::new(context, locals);
+    let mut stack: Vec<Val> = Vec::new();
 
     macro_rules! val_ty {
         (i32) => {
@@ -139,11 +125,9 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
                 let g = context.get_global(*global_index);
                 *g.borrow_mut().content_mut() = stack.pop().unwrap();
             }
-            Operator::GetLocal { local_index } => {
-                stack.push(context.locals[*local_index as usize].0.clone())
-            }
+            Operator::GetLocal { local_index } => stack.push(frame.get_local(*local_index).clone()),
             Operator::SetLocal { local_index } => {
-                context.locals[*local_index as usize].0 = stack.pop().unwrap()
+                *frame.get_local_mut(*local_index) = stack.pop().unwrap();
             }
             Operator::I32Store { memarg } => {
                 store!(memarg; i32);
@@ -164,18 +148,11 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
         }
         i += 1;
     }
-    context.stack.extend(stack.into_iter());
+    stack
 }
 
-pub(crate) fn eval_const<'a>(
-    instance_data: Rc<RefCell<InstanceData<'a>>>,
-    source: &dyn EvalSource,
-) -> Val {
-    let mut ctx = EvalContext {
-        instance_data,
-        locals: vec![],
-        stack: vec![],
-    };
-    eval(&mut ctx, source);
-    ctx.stack[0].clone()
+pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
+    let result = eval(context, source, vec![]);
+    debug_assert!(result.len() == 1);
+    result.into_iter().next().unwrap()
 }

@@ -85,12 +85,8 @@ impl<'a> Func for InstanceFunction<'a> {
             }
             locals
         };
-        let mut ctx = EvalContext {
-            instance_data: self.instance_data.clone(),
-            locals,
-            stack: Vec::new(),
-        };
-        eval(&mut ctx, &InstanceFunctionBody::new(&body));
-        Ok(ctx.stack.into_boxed_slice())
+        let mut ctx = EvalContext::new(self.instance_data.clone());
+        let result = eval(&mut ctx, &InstanceFunctionBody::new(&body), locals);
+        Ok(result.into_boxed_slice())
     }
 }
