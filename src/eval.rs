@@ -128,12 +128,71 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
     let mut i = 0;
     let mut stack: Vec<Val> = context.stack.split_off(0);
 
+    macro_rules! val_ty {
+        (i32) => {
+            Val::I32
+        };
+        (i64) => {
+            Val::I64
+        };
+        (f32) => {
+            Val::F32
+        };
+        (f64) => {
+            Val::F64
+        };
+    }
+    macro_rules! push {
+        ($e:expr; $ty:ident) => {
+            stack.push(val_ty!($ty)($e))
+        };
+    }
+    macro_rules! pop {
+        ($ty:ident) => {
+            (stack.pop().unwrap().$ty().unwrap())
+        };
+    }
+    macro_rules! step {
+        (|$a:ident: $ty_a:ident, $b:ident: $ty_b:ident| -> $ty:ident $e:expr) => {{
+            let $b = pop!($ty_b);
+            let $a = pop!($ty_a);
+            push!($e; $ty);
+        }};
+    }
+    macro_rules! load {
+        ($memarg:expr; $ty:ident) => {{
+            let offset = pop!(i32) as u32;
+            let ptr = context
+                .get_memory()
+                .borrow_mut()
+                .content_ptr($memarg, offset);
+            let val = unsafe { *(ptr as *const $ty) };
+            push!(val; $ty);
+        }};
+    }
+    macro_rules! store {
+        ($memarg:expr; $ty:ident) => {{
+            let val = pop!($ty);
+            let offset = pop!(i32) as u32;
+            let ptr = context
+                .get_memory()
+                .borrow_mut()
+                .content_ptr_mut($memarg, offset);
+            unsafe {
+                *(ptr as *mut $ty) = val;
+            }
+        }};
+    }
+
     loop {
         let op = &operators[i];
 
-        let mut goto = |relative_depth| {
-            i = cache.break_to(i, relative_depth);
-        };
+        macro_rules! break_to {
+            ($depth:expr) => {{
+                i = cache.break_to(i, $depth);
+                continue;
+            }};
+        }
 
         match op {
             Operator::End => {
@@ -146,14 +205,10 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
             Operator::BrIf { relative_depth } => {
                 let c = stack.pop().unwrap().i32().unwrap();
                 if c != 0 {
-                    goto(*relative_depth);
-                    continue;
+                    break_to!(*relative_depth);
                 }
             }
-            Operator::Br { relative_depth } => {
-                goto(*relative_depth);
-                continue;
-            }
+            Operator::Br { relative_depth } => break_to!(*relative_depth),
             Operator::Return => {
                 break;
             }
@@ -167,7 +222,7 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
                     Err(_) => unimplemented!("call trap"),
                 }
             }
-            Operator::I32Const { value } => stack.push(Val::I32(*value)),
+            Operator::I32Const { value } => push!(*value; i32),
             Operator::GetGlobal { global_index } => {
                 let g = context.get_global(*global_index);
                 stack.push(g.borrow().content().clone());
@@ -182,56 +237,20 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
             Operator::SetLocal { local_index } => {
                 context.locals[*local_index as usize].0 = stack.pop().unwrap()
             }
-            Operator::I32Sub => {
-                let b = stack.pop().unwrap().i32().unwrap();
-                let a = stack.pop().unwrap().i32().unwrap();
-                stack.push(Val::I32(a - b));
-            }
             Operator::I32Store { memarg } => {
-                let val = stack.pop().unwrap().i32().unwrap();
-                let offset = stack.pop().unwrap().i32().unwrap() as u32;
-                let ptr = context
-                    .get_memory()
-                    .borrow_mut()
-                    .content_ptr_mut(memarg, offset);
-                unsafe {
-                    *(ptr as *mut i32) = val;
-                }
+                store!(memarg; i32);
             }
             Operator::I32Load { memarg } => {
-                let offset = stack.pop().unwrap().i32().unwrap() as u32;
-                let ptr = context
-                    .get_memory()
-                    .borrow_mut()
-                    .content_ptr(memarg, offset);
-                let val = unsafe { *(ptr as *const i32) };
-                stack.push(Val::I32(val));
+                load!(memarg; i32);
             }
-            Operator::I32GtU => {
-                let b = stack.pop().unwrap().i32().unwrap() as u32;
-                let a = stack.pop().unwrap().i32().unwrap() as u32;
-                stack.push(Val::I32(if a > b { 1 } else { 0 }));
-            }
-            Operator::I32Eq => {
-                let b = stack.pop().unwrap().i32().unwrap() as u32;
-                let a = stack.pop().unwrap().i32().unwrap() as u32;
-                stack.push(Val::I32(if a == b { 1 } else { 0 }));
-            }
+            Operator::I32GtU => step!(|a:i32, b:i32| -> i32 if a > b { 1 } else { 0 }),
+            Operator::I32Eq => step!(|a:i32, b:i32| -> i32 if a == b { 1 } else { 0 }),
             Operator::I32RemU => {
-                let b = stack.pop().unwrap().i32().unwrap() as u32;
-                let a = stack.pop().unwrap().i32().unwrap() as u32;
-                stack.push(Val::I32((a % b) as i32));
+                step!(|a: i32, b: i32| -> i32 { ((a as u32) % (b as u32)) as i32 })
             }
-            Operator::I32And => {
-                let b = stack.pop().unwrap().i32().unwrap();
-                let a = stack.pop().unwrap().i32().unwrap();
-                stack.push(Val::I32(a & b));
-            }
-            Operator::I32Add => {
-                let b = stack.pop().unwrap().i32().unwrap();
-                let a = stack.pop().unwrap().i32().unwrap();
-                stack.push(Val::I32(a + b));
-            }
+            Operator::I32And => step!(|a:i32, b:i32| -> i32 a & b),
+            Operator::I32Add => step!(|a:i32, b:i32| -> i32 a + b),
+            Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a - b),
 
             x => unimplemented!("{:?}", x),
         }
