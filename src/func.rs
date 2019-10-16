@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::eval::BytecodeCache;
 use crate::eval::{eval, EvalContext, EvalSource, Local};
 use crate::externals::Func;
 use crate::instance::InstanceData;
@@ -23,11 +24,22 @@ impl<'a> InstanceFunction<'a> {
     }
 }
 
-struct InstanceFunctionBody<'a>(&'a wasmparser::FunctionBody<'a>);
+struct InstanceFunctionBody<'a> {
+    body: &'a wasmparser::FunctionBody<'a>,
+    bytecode: BytecodeCache<'a>,
+}
+
+impl<'a> InstanceFunctionBody<'a> {
+    pub fn new(body: &'a wasmparser::FunctionBody<'a>) -> Self {
+        let reader = body.get_operators_reader().expect("operators reader");
+        let bytecode = BytecodeCache::new(reader);
+        InstanceFunctionBody { body, bytecode }
+    }
+}
 
 impl<'a> EvalSource for InstanceFunctionBody<'a> {
-    fn create_reader(&self) -> wasmparser::OperatorsReader {
-        self.0.get_operators_reader().expect("operators reader")
+    fn bytecode(&self) -> &BytecodeCache {
+        &self.bytecode
     }
 }
 
@@ -78,7 +90,7 @@ impl<'a> Func for InstanceFunction<'a> {
             locals,
             stack: Vec::new(),
         };
-        eval(&mut ctx, &InstanceFunctionBody(&body));
+        eval(&mut ctx, &InstanceFunctionBody::new(&body));
         Ok(ctx.stack.into_boxed_slice())
     }
 }

@@ -1,11 +1,13 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
-use wasmparser::{Operator, OperatorsReader};
 
 use crate::externals::{Func, Global, Memory};
 use crate::instance::InstanceData;
 use crate::values::Val;
+
+pub(crate) use bytecode::{BytecodeCache, EvalSource, Operator};
+
+mod bytecode;
 
 pub struct Local(pub Val);
 
@@ -28,103 +30,9 @@ impl<'a> EvalContext<'a> {
     }
 }
 
-pub(crate) trait EvalSource {
-    fn create_reader(&self) -> OperatorsReader;
-}
-
-struct OperatorsCache<'a> {
-    operators: Vec<Operator<'a>>,
-    parents: HashMap<usize, usize>,
-    ends: Vec<(usize, usize)>,
-    loops: HashMap<usize, usize>,
-    elses: HashMap<usize, usize>,
-}
-
-impl<'a> OperatorsCache<'a> {
-    pub fn new(source: &'a dyn EvalSource) -> Self {
-        let operators = source
-            .create_reader()
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .expect("ops");
-        let mut parents = HashMap::new();
-        let mut ends = Vec::new();
-        let mut loops = HashMap::new();
-        let mut elses = HashMap::new();
-
-        let mut control = Vec::new();
-        for i in (0..operators.len()).rev() {
-            match operators[i] {
-                Operator::End => {
-                    if let Some(&(last, _)) = control.last() {
-                        parents.insert(i, last);
-                        ends.push((i, last));
-                    }
-                    control.push((i, None));
-                }
-                Operator::Loop { .. } => {
-                    let (end, _) = control.pop().unwrap();
-                    ends.push((i, end));
-                    loops.insert(end, i);
-                }
-                Operator::Block { .. } => {
-                    let (end, _) = control.pop().unwrap();
-                    ends.push((i, end));
-                }
-                Operator::If { .. } => {
-                    let (end, maybe_else) = control.pop().unwrap();
-                    if let Some(el) = maybe_else {
-                        elses.insert(i, el);
-                    }
-                    ends.push((i, end));
-                }
-                Operator::Else => {
-                    control.last_mut().unwrap().1 = Some(i);
-                }
-                _ => (),
-            }
-        }
-
-        assert!(control.len() == 1);
-        ends.push((0, control[0].0));
-        ends.reverse();
-
-        OperatorsCache {
-            operators,
-            parents,
-            ends,
-            loops,
-            elses,
-        }
-    }
-
-    pub fn break_to(&self, from: usize, depth: u32) -> usize {
-        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
-            Ok(i) => self.ends[i].1,
-            Err(i) => self.ends[i - 1].1,
-        };
-        for i in 0..depth {
-            end = self.parents[&end];
-        }
-        (if let Some(i) = self.loops.get(&end) {
-            *i
-        } else {
-            end
-        }) + 1
-    }
-
-    pub fn len(&self) -> usize {
-        self.operators.len()
-    }
-
-    pub fn operators(&self) -> &[Operator] {
-        &self.operators
-    }
-}
-
 pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
-    let cache = OperatorsCache::new(source);
-    let operators = cache.operators();
+    let bytecode = source.bytecode();
+    let operators = bytecode.operators();
     let mut i = 0;
     let mut stack: Vec<Val> = context.stack.split_off(0);
 
@@ -149,7 +57,7 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
     }
     macro_rules! pop {
         ($ty:ident) => {
-            (stack.pop().unwrap().$ty().unwrap())
+            stack.pop().unwrap().$ty().unwrap()
         };
     }
     macro_rules! step {
@@ -189,14 +97,14 @@ pub(crate) fn eval<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) {
 
         macro_rules! break_to {
             ($depth:expr) => {{
-                i = cache.break_to(i, $depth);
+                i = bytecode.break_to(i, $depth);
                 continue;
             }};
         }
 
         match op {
             Operator::End => {
-                if i + 1 >= cache.len() {
+                if i + 1 >= bytecode.len() {
                     break;
                 }
             }

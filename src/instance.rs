@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasmparser::{ExternalKind, ImportSectionEntryType, InitExpr, OperatorsReader};
 
-use crate::eval::{eval_const, EvalSource};
+use crate::eval::{eval_const, BytecodeCache, EvalSource};
 use crate::externals::{External, Func, Global, Memory};
 use crate::func::InstanceFunction;
 use crate::global::InstanceGlobal;
@@ -75,13 +75,14 @@ impl<'a> Instance<'a> {
                 .push(Rc::new(RefCell::new(memory)));
         }
         for g in module_data.borrow().globals.iter() {
-            struct S<'s>(&'s InitExpr<'s>);
+            struct S<'s>(BytecodeCache<'s>);
             impl<'s> EvalSource for S<'s> {
-                fn create_reader(&self) -> OperatorsReader {
-                    self.0.get_operators_reader()
+                fn bytecode(&self) -> &BytecodeCache {
+                    &self.0
                 }
             }
-            let init_expr_source = S(&g.init_expr);
+            let bytecode = BytecodeCache::new(g.init_expr.get_operators_reader());
+            let init_expr_source = S(bytecode);
             let init_val = eval_const(data.clone(), &init_expr_source);
             let global = InstanceGlobal::new(init_val);
             data.borrow_mut()

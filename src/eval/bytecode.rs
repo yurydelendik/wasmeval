@@ -1,0 +1,98 @@
+use std::collections::HashMap;
+use std::vec::Vec;
+use wasmparser::OperatorsReader;
+
+pub use wasmparser::Operator;
+
+pub struct BytecodeCache<'a> {
+    operators: Vec<Operator<'a>>,
+    parents: HashMap<usize, usize>,
+    ends: Vec<(usize, usize)>,
+    loops: HashMap<usize, usize>,
+    elses: HashMap<usize, usize>,
+}
+
+impl<'a> BytecodeCache<'a> {
+    pub fn new(reader: OperatorsReader<'a>) -> Self {
+        let operators = reader
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("ops");
+        let mut parents = HashMap::new();
+        let mut ends = Vec::new();
+        let mut loops = HashMap::new();
+        let mut elses = HashMap::new();
+
+        let mut control = Vec::new();
+        for i in (0..operators.len()).rev() {
+            match operators[i] {
+                Operator::End => {
+                    if let Some(&(last, _)) = control.last() {
+                        parents.insert(i, last);
+                        ends.push((i, last));
+                    }
+                    control.push((i, None));
+                }
+                Operator::Loop { .. } => {
+                    let (end, _) = control.pop().unwrap();
+                    ends.push((i, end));
+                    loops.insert(end, i);
+                }
+                Operator::Block { .. } => {
+                    let (end, _) = control.pop().unwrap();
+                    ends.push((i, end));
+                }
+                Operator::If { .. } => {
+                    let (end, maybe_else) = control.pop().unwrap();
+                    if let Some(el) = maybe_else {
+                        elses.insert(i, el);
+                    }
+                    ends.push((i, end));
+                }
+                Operator::Else => {
+                    control.last_mut().unwrap().1 = Some(i);
+                }
+                _ => (),
+            }
+        }
+
+        assert!(control.len() == 1);
+        ends.push((0, control[0].0));
+        ends.reverse();
+
+        BytecodeCache {
+            operators,
+            parents,
+            ends,
+            loops,
+            elses,
+        }
+    }
+
+    pub fn break_to(&self, from: usize, depth: u32) -> usize {
+        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
+            Ok(i) => self.ends[i].1,
+            Err(i) => self.ends[i - 1].1,
+        };
+        for _ in 0..depth {
+            end = self.parents[&end];
+        }
+        (if let Some(i) = self.loops.get(&end) {
+            *i
+        } else {
+            end
+        }) + 1
+    }
+
+    pub fn len(&self) -> usize {
+        self.operators.len()
+    }
+
+    pub fn operators(&self) -> &[Operator] {
+        &self.operators
+    }
+}
+
+pub(crate) trait EvalSource {
+    fn bytecode(&self) -> &BytecodeCache;
+}
