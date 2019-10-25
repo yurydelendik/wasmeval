@@ -29,7 +29,7 @@ fn _hello() -> Result<(), Error> {
             0
         }
 
-        fn call(&self, _params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>> {
+        fn call(&self, _params: &[Val]) -> Result<Box<[Val]>, Rc<Trap>> {
             println!("Hello, world!");
             Ok(Box::new([]))
         }

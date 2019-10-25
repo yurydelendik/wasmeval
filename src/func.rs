@@ -64,7 +64,7 @@ impl<'a> Func for InstanceFunction<'a> {
         func_type.returns.len()
     }
 
-    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>> {
+    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<Trap>> {
         let module_data = Ref::map(self.instance_data.borrow(), |data| {
             data.module_data.as_ref()
         });
@@ -87,6 +87,6 @@ impl<'a> Func for InstanceFunction<'a> {
         };
         let mut ctx = EvalContext::new(self.instance_data.clone());
         let result = eval(&mut ctx, &InstanceFunctionBody::new(&body), locals);
-        Ok(result.into_boxed_slice())
+        result
     }
 }

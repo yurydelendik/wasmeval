@@ -84,6 +84,23 @@ impl<'a> BytecodeCache<'a> {
         }) + 1
     }
 
+    pub fn skip_to_else(&self, from_if: usize) -> usize {
+        // TODO assert from_if for if
+        if let Some(el) = self.elses.get(&from_if) {
+            return *el + 1;
+        }
+        // No else, skipping
+        self.skip_to_end(from_if)
+    }
+
+    pub fn skip_to_end(&self, from: usize) -> usize {
+        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
+            Ok(i) => self.ends[i].1,
+            Err(i) => self.ends[i - 1].1,
+        };
+        end + 1
+    }
+
     pub fn len(&self) -> usize {
         self.operators.len()
     }

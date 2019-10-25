@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::externals::{Func, Global, Memory};
 use crate::instance::InstanceData;
-use crate::values::Val;
+use crate::values::{Trap, Val};
 
 pub(crate) use bytecode::{BytecodeCache, EvalSource, Operator};
 pub(crate) use context::{EvalContext, Frame, Local};
@@ -15,7 +15,7 @@ pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
     source: &dyn EvalSource,
     locals: Vec<Local>,
-) -> Vec<Val> {
+) -> Result<Box<[Val]>, Rc<Trap>> {
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
@@ -36,6 +36,20 @@ pub(crate) fn eval<'a>(
             Val::F64
         };
     }
+    macro_rules! rust_ty {
+        (i32) => {
+            i32
+        };
+        (i64) => {
+            i64
+        };
+        (f32) => {
+            u32
+        };
+        (f64) => {
+            u64
+        };
+    }
     macro_rules! push {
         ($e:expr; $ty:ident) => {
             stack.push(val_ty!($ty)($e))
@@ -47,6 +61,10 @@ pub(crate) fn eval<'a>(
         };
     }
     macro_rules! step {
+        (|$a:ident: $ty_a:ident| -> $ty:ident $e:expr) => {{
+            let $a = pop!($ty_a);
+            push!($e; $ty);
+        }};
         (|$a:ident: $ty_a:ident, $b:ident: $ty_b:ident| -> $ty:ident $e:expr) => {{
             let $b = pop!($ty_b);
             let $a = pop!($ty_a);
@@ -60,7 +78,16 @@ pub(crate) fn eval<'a>(
                 .get_memory()
                 .borrow_mut()
                 .content_ptr($memarg, offset);
-            let val = unsafe { *(ptr as *const $ty) };
+            let val = unsafe { *(ptr as *const rust_ty!($ty)) };
+            push!(val; $ty);
+        }};
+        ($memarg:expr; $ty:ident as $tt:ident) => {{
+            let offset = pop!(i32) as u32;
+            let ptr = context
+                .get_memory()
+                .borrow_mut()
+                .content_ptr($memarg, offset);
+            let val = unsafe { *(ptr as *const $tt) } as rust_ty!($ty);
             push!(val; $ty);
         }};
     }
@@ -73,7 +100,18 @@ pub(crate) fn eval<'a>(
                 .borrow_mut()
                 .content_ptr_mut($memarg, offset);
             unsafe {
-                *(ptr as *mut $ty) = val;
+                *(ptr as *mut rust_ty!($ty)) = val;
+            }
+        }};
+        ($memarg:expr; $ty:ident as $tt:ident) => {{
+            let val = pop!($ty) as $tt;
+            let offset = pop!(i32) as u32;
+            let ptr = context
+                .get_memory()
+                .borrow_mut()
+                .content_ptr_mut($memarg, offset);
+            unsafe {
+                *(ptr as *mut $tt) = val;
             }
         }};
     }
@@ -84,13 +122,27 @@ pub(crate) fn eval<'a>(
         }};
     }
 
+    // TODO validate stack state
+    // TODO handle traps
+
     loop {
         match &operators[i] {
-            Operator::Unreachable => unimplemented!("{:?}", operators[i]),
+            Operator::Unreachable => {
+                return Err(Rc::new(Trap));
+            }
             Operator::Nop => (),
             Operator::Block { .. } | Operator::Loop { .. } => (),
-            Operator::If { ty } => unimplemented!("{:?}", operators[i]),
-            Operator::Else => unimplemented!("{:?}", operators[i]),
+            Operator::If { ty } => {
+                let c = pop!(i32);
+                if c == 0 {
+                    i = bytecode.skip_to_else(i);
+                    continue;
+                }
+            }
+            Operator::Else => {
+                i = bytecode.skip_to_end(i);
+                continue;
+            }
             Operator::End => {
                 if i + 1 >= bytecode.len() {
                     break;
@@ -98,7 +150,7 @@ pub(crate) fn eval<'a>(
             }
             Operator::Br { relative_depth } => break_to!(*relative_depth),
             Operator::BrIf { relative_depth } => {
-                let c = stack.pop().unwrap().i32().unwrap();
+                let c = pop!(i32);
                 if c != 0 {
                     break_to!(*relative_depth);
                 }
@@ -113,14 +165,23 @@ pub(crate) fn eval<'a>(
                 let result = f.borrow().call(&params);
                 match result {
                     Ok(returns) => stack.extend_from_slice(&returns),
-                    Err(_) => unimplemented!("call trap"),
+                    Err(trap) => {
+                        return Err(trap);
+                    }
                 }
             }
             Operator::CallIndirect { index, table_index } => unimplemented!("{:?}", operators[i]),
             Operator::Drop => {
                 stack.pop().unwrap();
             }
-            Operator::Select => unimplemented!("{:?}", operators[i]),
+            Operator::Select => {
+                let c = pop!(i32);
+                if c != 0 {
+                    stack.pop().unwrap();
+                } else {
+                    *stack.last_mut().unwrap() = stack.pop().unwrap();
+                }
+            }
             Operator::GetLocal { local_index } => stack.push(frame.get_local(*local_index).clone()),
             Operator::SetLocal { local_index } => {
                 *frame.get_local_mut(*local_index) = stack.pop().unwrap();
@@ -142,52 +203,106 @@ pub(crate) fn eval<'a>(
             Operator::I64Load { memarg } => {
                 load!(memarg; i64);
             }
-            Operator::F32Load { .. }
-            | Operator::F64Load { .. }
-            | Operator::I32Load8S { .. }
-            | Operator::I32Load8U { .. }
-            | Operator::I32Load16S { .. }
-            | Operator::I32Load16U { .. }
-            | Operator::I64Load8S { .. }
-            | Operator::I64Load8U { .. }
-            | Operator::I64Load16S { .. }
-            | Operator::I64Load16U { .. }
-            | Operator::I64Load32S { .. }
-            | Operator::I64Load32U { .. } => unimplemented!("{:?}", operators[i]),
+            Operator::F32Load { memarg } => {
+                load!(memarg; f32);
+            }
+            Operator::F64Load { memarg } => {
+                load!(memarg; f64);
+            }
+            Operator::I32Load8S { memarg } => {
+                load!(memarg; i32 as i8);
+            }
+            Operator::I32Load8U { memarg } => {
+                load!(memarg; i32 as u8);
+            }
+            Operator::I32Load16S { memarg } => {
+                load!(memarg; i32 as i16);
+            }
+            Operator::I32Load16U { memarg } => {
+                load!(memarg; i32 as u16);
+            }
+            Operator::I64Load8S { memarg } => {
+                load!(memarg; i64 as i8);
+            }
+            Operator::I64Load8U { memarg } => {
+                load!(memarg; i64 as u8);
+            }
+            Operator::I64Load16S { memarg } => {
+                load!(memarg; i64 as i16);
+            }
+            Operator::I64Load16U { memarg } => {
+                load!(memarg; i64 as u16);
+            }
+            Operator::I64Load32S { memarg } => {
+                load!(memarg; i64 as i32);
+            }
+            Operator::I64Load32U { memarg } => {
+                load!(memarg; i64 as u32);
+            }
             Operator::I32Store { memarg } => {
                 store!(memarg; i32);
             }
             Operator::I64Store { memarg } => {
                 store!(memarg; i64);
             }
-            Operator::F32Store { .. }
-            | Operator::F64Store { .. }
-            | Operator::I32Store8 { .. }
-            | Operator::I32Store16 { .. }
-            | Operator::I64Store8 { .. }
-            | Operator::I64Store16 { .. }
-            | Operator::I64Store32 { .. } => unimplemented!("{:?}", operators[i]),
+            Operator::F32Store { memarg } => {
+                store!(memarg; f32);
+            }
+            Operator::F64Store { memarg } => {
+                store!(memarg; f64);
+            }
+            Operator::I32Store8 { memarg } => {
+                store!(memarg; i32 as u8);
+            }
+            Operator::I32Store16 { memarg } => {
+                store!(memarg; i32 as u16);
+            }
+            Operator::I64Store8 { memarg } => {
+                store!(memarg; i64 as u8);
+            }
+            Operator::I64Store16 { memarg } => {
+                store!(memarg; i64 as u16);
+            }
+            Operator::I64Store32 { memarg } => {
+                store!(memarg; i64 as u32);
+            }
             Operator::MemorySize {
                 reserved: memory_index,
+            } => {
+                let current = context.get_memory().borrow().current();
+                push!(current as i32; i32)
             }
-            | Operator::MemoryGrow {
+            Operator::MemoryGrow {
                 reserved: memory_index,
-            } => unimplemented!("{:?}", operators[i]),
+            } => {
+                let delta = pop!(i32) as u32;
+                let current = context.get_memory().borrow_mut().grow(delta);
+                push!(current as i32; i32)
+            }
             Operator::I32Const { value } => push!(*value; i32),
             Operator::I64Const { value } => push!(*value; i64),
-            Operator::F32Const { .. } | Operator::F64Const { .. } | Operator::I32Eqz => {
-                unimplemented!("{:?}", operators[i])
-            }
+            Operator::F32Const { value } => push!(value.bits(); f32),
+            Operator::F64Const { value } => push!(value.bits(); f64),
+            Operator::I32Eqz => step!(|a:i32| -> i32 if a != 0 { 1 } else { 0 }),
             Operator::I32Eq => step!(|a:i32, b:i32| -> i32 if a == b { 1 } else { 0 }),
-            Operator::I32Ne | Operator::I32LtS | Operator::I32LtU | Operator::I32GtS => {
-                unimplemented!()
+            Operator::I32Ne => step!(|a:i32, b:i32| -> i32 if a == b { 0 } else { 1 }),
+            Operator::I32LtS => step!(|a:i32, b:i32| -> i32 if a < b { 1 } else { 0 }),
+            Operator::I32LtU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) < b as u32 { 1 } else { 0 })
             }
-            Operator::I32GtU => step!(|a:i32, b:i32| -> i32 if a > b { 1 } else { 0 }),
-            Operator::I32LeS
-            | Operator::I32LeU
-            | Operator::I32GeS
-            | Operator::I32GeU
-            | Operator::I64Eqz
+            Operator::I32GtS => step!(|a:i32, b:i32| -> i32 if a > b { 1 } else { 0 }),
+            Operator::I32GtU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) > b as u32 { 1 } else { 0 })
+            }
+            Operator::I32LeS => step!(|a:i32, b:i32| -> i32 if a <= b { 1 } else { 0 }),
+            Operator::I32LeU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) <= b as u32 { 1 } else { 0 })
+            }
+            Operator::I32GeS => step!(|a:i32, b:i32| -> i32 if a >= b { 1 } else { 0 }),
+            Operator::I32GeU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 })
+            }
+            Operator::I64Eqz
             | Operator::I64Eq
             | Operator::I64Ne
             | Operator::I64LtS
@@ -540,11 +655,18 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
-    stack
+    Ok(stack.into_boxed_slice())
 }
 
 pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
     let result = eval(context, source, vec![]);
-    debug_assert!(result.len() == 1);
-    result.into_iter().next().unwrap()
+    match result {
+        Ok(val) => {
+            debug_assert!(val.len() == 1);
+            val[0].clone()
+        }
+        Err(_) => {
+            panic!("trap duing eval_const");
+        }
+    }
 }

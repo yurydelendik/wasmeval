@@ -7,10 +7,12 @@ use crate::values::{Trap, Val};
 pub trait Func {
     fn params_arity(&self) -> usize;
     fn results_arity(&self) -> usize;
-    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<RefCell<Trap>>>;
+    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<Trap>>;
 }
 
 pub trait Memory {
+    fn current(&self) -> u32;
+    fn grow(&mut self, delta: u32) -> u32;
     fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32) -> *const u8;
     fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32) -> *mut u8;
 }

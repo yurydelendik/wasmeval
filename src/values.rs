@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 #[derive(Debug, Clone)]
 pub enum Val {
     I32(i32),
@@ -69,6 +71,7 @@ impl From<wasmparser::Type> for ValType {
     }
 }
 
+#[derive(Debug)]
 pub struct Trap;
 
 pub fn get_default_value(ty: ValType) -> Val {
@@ -78,4 +81,10 @@ pub fn get_default_value(ty: ValType) -> Val {
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
     }
+}
+
+#[derive(Debug)]
+pub enum ExecutionResult {
+    Values(Vec<Val>),
+    Trap(Rc<Trap>),
 }
