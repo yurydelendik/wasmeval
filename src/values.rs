@@ -82,9 +82,3 @@ pub fn get_default_value(ty: ValType) -> Val {
         ValType::F64 => Val::F64(0),
     }
 }
-
-#[derive(Debug)]
-pub enum ExecutionResult {
-    Values(Vec<Val>),
-    Trap(Rc<Trap>),
-}

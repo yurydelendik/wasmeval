@@ -10,6 +10,7 @@ pub(crate) use context::{EvalContext, Frame, Local};
 
 mod bytecode;
 mod context;
+mod floats;
 
 pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
@@ -368,9 +369,9 @@ pub(crate) fn eval<'a>(
             | Operator::F32Floor
             | Operator::F32Trunc
             | Operator::F32Nearest
-            | Operator::F32Sqrt
-            | Operator::F32Add
-            | Operator::F32Sub
+            | Operator::F32Sqrt => unimplemented!("{:?}", operators[i]),
+            Operator::F32Add => step!(|a:f32, b:f32| -> f32 floats::add_f32(a, b)),
+            Operator::F32Sub
             | Operator::F32Mul
             | Operator::F32Div
             | Operator::F32Min
@@ -382,9 +383,9 @@ pub(crate) fn eval<'a>(
             | Operator::F64Floor
             | Operator::F64Trunc
             | Operator::F64Nearest
-            | Operator::F64Sqrt
-            | Operator::F64Add
-            | Operator::F64Sub
+            | Operator::F64Sqrt => unimplemented!("{:?}", operators[i]),
+            Operator::F64Add => step!(|a:f64, b:f64| -> f64 floats::add_f64(a, b)),
+            Operator::F64Sub
             | Operator::F64Mul
             | Operator::F64Div
             | Operator::F64Min
