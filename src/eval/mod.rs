@@ -7,6 +7,8 @@ mod bytecode;
 mod context;
 mod floats;
 
+const STACK_LIMIT: u32 = 10;
+
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
@@ -122,7 +124,7 @@ pub(crate) fn eval<'a>(
     // TODO validate stack state
     // TODO handle traps
 
-    loop {
+    while i < operators.len() {
         match &operators[i] {
             Operator::Unreachable => {
                 return Err(Trap);
@@ -280,35 +282,27 @@ pub(crate) fn eval<'a>(
             Operator::I64Const { value } => push!(*value; i64),
             Operator::F32Const { value } => push!(value.bits(); f32),
             Operator::F64Const { value } => push!(value.bits(); f64),
-            Operator::I32Eqz => step!(|a:i32| -> i32 if a != 0 { 1 } else { 0 }),
+            Operator::I32Eqz => step!(|a:i32| -> i32 if a == 0 { 1 } else { 0 }),
             Operator::I32Eq => step!(|a:i32, b:i32| -> i32 if a == b { 1 } else { 0 }),
             Operator::I32Ne => step!(|a:i32, b:i32| -> i32 if a == b { 0 } else { 1 }),
             Operator::I32LtS => step!(|a:i32, b:i32| -> i32 if a < b { 1 } else { 0 }),
-            Operator::I32LtU => {
-                step!(|a:i32, b:i32| -> i32 if (a as u32) < b as u32 { 1 } else { 0 })
-            }
+            Operator::I32LtU => step!(|a:i32, b:i32| -> i32 if (a as u32) < b as u32 { 1 } else { 0 }),
             Operator::I32GtS => step!(|a:i32, b:i32| -> i32 if a > b { 1 } else { 0 }),
-            Operator::I32GtU => {
-                step!(|a:i32, b:i32| -> i32 if (a as u32) > b as u32 { 1 } else { 0 })
-            }
+            Operator::I32GtU => step!(|a:i32, b:i32| -> i32 if (a as u32) > b as u32 { 1 } else { 0 }),
             Operator::I32LeS => step!(|a:i32, b:i32| -> i32 if a <= b { 1 } else { 0 }),
-            Operator::I32LeU => {
-                step!(|a:i32, b:i32| -> i32 if (a as u32) <= b as u32 { 1 } else { 0 })
-            }
+            Operator::I32LeU => step!(|a:i32, b:i32| -> i32 if (a as u32) <= b as u32 { 1 } else { 0 }),
             Operator::I32GeS => step!(|a:i32, b:i32| -> i32 if a >= b { 1 } else { 0 }),
-            Operator::I32GeU => {
-                step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 })
-            }
-            Operator::I64Eqz
-            | Operator::I64Eq
+            Operator::I32GeU => step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 }),
+            Operator::I64Eqz => step!(|a:i64| -> i32 if a == 0 { 1 } else { 0 }),
+            Operator::I64Eq
             | Operator::I64Ne
             | Operator::I64LtS
             | Operator::I64LtU
             | Operator::I64GtS
             | Operator::I64GtU
-            | Operator::I64LeS
-            | Operator::I64LeU
-            | Operator::I64GeS
+            | Operator::I64LeS => unimplemented!("{:?}", operators[i]),
+            Operator::I64LeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
+            Operator::I64GeS
             | Operator::I64GeU
             | Operator::F32Eq
             | Operator::F32Ne
@@ -325,11 +319,9 @@ pub(crate) fn eval<'a>(
             | Operator::I32Clz
             | Operator::I32Ctz
             | Operator::I32Popcnt => unimplemented!("{:?}", operators[i]),
-            Operator::I32Add => step!(|a:i32, b:i32| -> i32 a + b),
-            Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a - b),
-            Operator::I32Mul | Operator::I32DivS | Operator::I32DivU | Operator::I32RemS => {
-                unimplemented!()
-            }
+            Operator::I32Add => step!(|a:i32, b:i32| -> i32 a.wrapping_add(b)),
+            Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a.wrapping_sub(b)),
+            Operator::I32Mul | Operator::I32DivS | Operator::I32DivU | Operator::I32RemS => unimplemented!(),
             Operator::I32RemU => {
                 step!(|a: i32, b: i32| -> i32 { ((a as u32) % (b as u32)) as i32 })
             }
@@ -343,11 +335,11 @@ pub(crate) fn eval<'a>(
             | Operator::I32Rotr
             | Operator::I64Clz
             | Operator::I64Ctz
-            | Operator::I64Popcnt
-            | Operator::I64Add
-            | Operator::I64Sub
-            | Operator::I64Mul
-            | Operator::I64DivS
+            | Operator::I64Popcnt => unimplemented!("{:?}", operators[i]),
+            Operator::I64Add => step!(|a:i64, b:i64| -> i64 a.wrapping_add(b)),
+            Operator::I64Sub => step!(|a:i64, b:i64| -> i64 a.wrapping_sub(b)),
+            Operator::I64Mul => step!(|a:i64, b:i64| -> i64 a.wrapping_mul(b)),
+            Operator::I64DivS
             | Operator::I64DivU
             | Operator::I64RemS
             | Operator::I64RemU
@@ -358,42 +350,42 @@ pub(crate) fn eval<'a>(
             | Operator::I64ShrS
             | Operator::I64ShrU
             | Operator::I64Rotl
-            | Operator::I64Rotr
-            | Operator::F32Abs
-            | Operator::F32Neg
-            | Operator::F32Ceil
-            | Operator::F32Floor
-            | Operator::F32Trunc
-            | Operator::F32Nearest
-            | Operator::F32Sqrt => unimplemented!("{:?}", operators[i]),
+            | Operator::I64Rotr => unimplemented!("{:?}", operators[i]),
+            Operator::F32Abs => step!(|a:f32| -> f32 floats::abs_f32(a)),
+            Operator::F32Neg => step!(|a:f32| -> f32 floats::neg_f32(a)),
+            Operator::F32Ceil => step!(|a:f32| -> f32 floats::ceil_f32(a)),
+            Operator::F32Floor => step!(|a:f32| -> f32 floats::floor_f32(a)),
+            Operator::F32Trunc => step!(|a:f32| -> f32 floats::trunc_f32(a)),
+            Operator::F32Nearest => step!(|a:f32| -> f32 floats::nearby_f32(a)),
+            Operator::F32Sqrt => step!(|a:f32| -> f32 floats::sqrt_f32(a)),
             Operator::F32Add => step!(|a:f32, b:f32| -> f32 floats::add_f32(a, b)),
-            Operator::F32Sub
-            | Operator::F32Mul
-            | Operator::F32Div
-            | Operator::F32Min
-            | Operator::F32Max
-            | Operator::F32Copysign
-            | Operator::F64Abs
-            | Operator::F64Neg
-            | Operator::F64Ceil
-            | Operator::F64Floor
-            | Operator::F64Trunc
-            | Operator::F64Nearest
-            | Operator::F64Sqrt => unimplemented!("{:?}", operators[i]),
+            Operator::F32Sub => step!(|a:f32, b:f32| -> f32 floats::sub_f32(a, b)),
+            Operator::F32Mul => step!(|a:f32, b:f32| -> f32 floats::mul_f32(a, b)),
+            Operator::F32Div => step!(|a:f32, b:f32| -> f32 floats::div_f32(a, b)),
+            Operator::F32Min => step!(|a:f32, b:f32| -> f32 floats::min_f32(a, b)),
+            Operator::F32Max => step!(|a:f32, b:f32| -> f32 floats::max_f32(a, b)),
+            Operator::F32Copysign => step!(|a:f32, b:f32| -> f32 floats::copysign_f32(a, b)),
+            Operator::F64Abs => step!(|a:f64| -> f64 floats::abs_f64(a)),
+            Operator::F64Neg => step!(|a:f64| -> f64 floats::neg_f64(a)),
+            Operator::F64Ceil => step!(|a:f64| -> f64 floats::ceil_f64(a)),
+            Operator::F64Floor => step!(|a:f64| -> f64 floats::floor_f64(a)),
+            Operator::F64Trunc => step!(|a:f64| -> f64 floats::trunc_f64(a)),
+            Operator::F64Nearest => step!(|a:f64| -> f64 floats::nearby_f64(a)),
+            Operator::F64Sqrt => step!(|a:f64| -> f64 floats::sqrt_f64(a)),
             Operator::F64Add => step!(|a:f64, b:f64| -> f64 floats::add_f64(a, b)),
-            Operator::F64Sub
-            | Operator::F64Mul
-            | Operator::F64Div
-            | Operator::F64Min
-            | Operator::F64Max
-            | Operator::F64Copysign
-            | Operator::I32WrapI64
+            Operator::F64Sub => step!(|a:f64, b:f64| -> f64 floats::sub_f64(a, b)),
+            Operator::F64Mul => step!(|a:f64, b:f64| -> f64 floats::mul_f64(a, b)),
+            Operator::F64Div => step!(|a:f64, b:f64| -> f64 floats::div_f64(a, b)),
+            Operator::F64Min => step!(|a:f64, b:f64| -> f64 floats::min_f64(a, b)),
+            Operator::F64Max => step!(|a:f64, b:f64| -> f64 floats::max_f64(a, b)),
+            Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 floats::copysign_f64(a, b)),
+            Operator::I32WrapI64
             | Operator::I32TruncSF32
             | Operator::I32TruncUF32
             | Operator::I32TruncSF64
-            | Operator::I32TruncUF64
-            | Operator::I64ExtendSI32
-            | Operator::I64ExtendUI32
+            | Operator::I32TruncUF64 => unimplemented!("{:?}", operators[i]),
+            Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
+            Operator::I64ExtendUI32
             | Operator::I64TruncSF32
             | Operator::I64TruncUF32
             | Operator::I64TruncSF64

@@ -70,22 +70,25 @@ impl<'a> Func for InstanceFunction<'a> {
         let body = Ref::map(module_data.borrow(), |data| {
             &data.func_bodies[self.defined_index]
         });
-        let locals = {
-            let mut locals = Vec::new();
-            for param in params {
-                locals.push(Local(param.clone()));
-            }
-            for local in body.get_locals_reader().expect("reader").into_iter() {
-                let (count, ty) = local.expect("local def");
-                for _ in 0..count {
-                    let local_val = get_default_value(ty.into());
-                    locals.push(Local(local_val));
-                }
-            }
-            locals
-        };
+        let locals = read_body_locals(params, &body);
         let mut ctx = EvalContext::new(self.instance_data.clone());
-        let result = eval(&mut ctx, &InstanceFunctionBody::new(&body), locals);
+        let body = Box::new(InstanceFunctionBody::new(&body));
+        let result = eval(&mut ctx, &*body, locals);
         result
     }
+}
+
+fn read_body_locals(params: &[Val], body: &wasmparser::FunctionBody) -> Vec<Local> {
+    let mut locals = Vec::new();
+    for param in params {
+        locals.push(Local(param.clone()));
+    }
+    for local in body.get_locals_reader().expect("reader").into_iter() {
+        let (count, ty) = local.expect("local def");
+        for _ in 0..count {
+            let local_val = get_default_value(ty.into());
+            locals.push(Local(local_val));
+        }
+    }
+    locals
 }
