@@ -1,7 +1,7 @@
 use failure::{bail, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::{ExternalKind, ImportSectionEntryType, InitExpr, OperatorsReader};
+use wasmparser::{ExternalKind, ImportSectionEntryType};
 
 use crate::eval::{eval_const, BytecodeCache, EvalContext, EvalSource};
 use crate::externals::{External, Func, Global, Memory};
@@ -18,6 +18,7 @@ pub(crate) struct InstanceData<'a> {
 }
 
 pub struct Instance<'a> {
+    #[allow(dead_code)]
     data: Rc<RefCell<InstanceData<'a>>>,
     exports: Vec<External<'a>>,
 }

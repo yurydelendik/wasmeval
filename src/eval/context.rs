@@ -28,6 +28,7 @@ impl<'a> EvalContext<'a> {
 }
 
 pub(crate) struct Frame<'a, 'e> {
+    #[allow(dead_code)]
     context: &'a EvalContext<'e>,
     locals: Vec<Local>,
 }

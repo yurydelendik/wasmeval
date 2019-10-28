@@ -1,5 +1,6 @@
 pub use crate::externals::{External, Func};
 pub use crate::instance::Instance;
+pub use crate::memory::InstanceMemory;
 pub use crate::module::Module;
 pub use crate::values::{Trap, Val};
 

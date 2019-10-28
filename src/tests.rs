@@ -15,7 +15,7 @@ fn parse_module<'a>(module: ModuleBinary) -> Result<Module<'a>, Error> {
 }
 
 fn instantiate_module<'a, 'b>(
-    context: &'b Context<'a>,
+    _context: &'b Context<'a>,
     module: ModuleBinary,
 ) -> Result<(Instance<'a>, Module<'a>), Error> {
     let module = parse_module(module)?;
@@ -27,7 +27,7 @@ fn instantiate_module<'a, 'b>(
 fn call_func<'a>(
     f: Rc<RefCell<dyn Func + 'a>>,
     args: Vec<Value<f32, f64>>,
-) -> Result<Box<[Val]>, Rc<Trap>> {
+) -> Result<Box<[Val]>, Trap> {
     let args = args
         .into_iter()
         .map(|a| match a {
@@ -44,7 +44,7 @@ fn call_func<'a>(
 fn preform_action<'a, 'b>(
     context: &'b Context<'a>,
     action: Action<f32, f64>,
-) -> Result<Box<[Val]>, Rc<Trap>> {
+) -> Result<Box<[Val]>, Trap> {
     let get_export = |module: Option<String>, field: String| -> Option<&External<'a>> {
         let (instance, module) = context.find_instance(module);
         module
@@ -169,15 +169,13 @@ where
                 let (instance, module) = instantiate_module(&context, module).expect("module");
                 context.add_instance(instance, module, name);
             }
-            CommandKind::AssertUninstantiable { module, .. }
-            | CommandKind::AssertUnlinkable { module, .. } => {
+            CommandKind::AssertUninstantiable { .. } | CommandKind::AssertUnlinkable { .. } => {
                 println!("{}:{}: skipping TODO!!!", filename, line);
                 // if let Err(err) = validate_module(module, ()) {
                 //     panic!("{}:{}: invalid module: {:?}", filename, line, err);
                 // }
             }
-            CommandKind::AssertInvalid { module, .. }
-            | CommandKind::AssertMalformed { module, .. } => {
+            CommandKind::AssertInvalid { .. } | CommandKind::AssertMalformed { .. } => {
                 println!("{}:{}: skipping TODO!!!", filename, line);
                 // // TODO diffentiate between assert_invalid and assert_malformed
                 // if let Ok(_) = validate_module(module, ()) {
@@ -236,7 +234,7 @@ fn run_spec_tests() {
             continue;
         }
 
-        let mut wabt_features = Features::new();
+        let wabt_features = Features::new();
 
         let data = read(&dir.path()).expect("wast data");
         run_wabt_scripts(

@@ -1,10 +1,8 @@
 use failure::{bail, Error};
-use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
-use std::rc::Rc;
 
-use wasmeval::{External, Func, Instance, Module, Trap, Val};
+use wasmeval::{Instance, Module, Val};
 
 fn main() -> Result<(), Error> {
     let bin = fs::read(Path::new("examples/gcd.wasm")).expect("file data");

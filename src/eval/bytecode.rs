@@ -94,7 +94,7 @@ impl<'a> BytecodeCache<'a> {
     }
 
     pub fn skip_to_end(&self, from: usize) -> usize {
-        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
+        let end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
             Ok(i) => self.ends[i].1,
             Err(i) => self.ends[i - 1].1,
         };

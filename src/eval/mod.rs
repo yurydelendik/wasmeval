@@ -1,8 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use crate::externals::{Func, Global, Memory};
-use crate::instance::InstanceData;
 use crate::values::{Trap, Val};
 
 pub(crate) use bytecode::{BytecodeCache, EvalSource, Operator};
@@ -12,11 +7,12 @@ mod bytecode;
 mod context;
 mod floats;
 
+#[allow(unused_variables)]
 pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
     source: &dyn EvalSource,
     locals: Vec<Local>,
-) -> Result<Box<[Val]>, Rc<Trap>> {
+) -> Result<Box<[Val]>, Trap> {
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
@@ -129,7 +125,7 @@ pub(crate) fn eval<'a>(
     loop {
         match &operators[i] {
             Operator::Unreachable => {
-                return Err(Rc::new(Trap));
+                return Err(Trap);
             }
             Operator::Nop => (),
             Operator::Block { .. } | Operator::Loop { .. } => (),

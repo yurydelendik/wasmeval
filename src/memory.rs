@@ -5,6 +5,7 @@ const PAGE_SIZE: usize = 0x10000;
 
 pub struct InstanceMemory {
     buffer: Vec<u8>,
+    #[allow(dead_code)]
     max: usize,
 }
 

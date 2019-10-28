@@ -16,7 +16,7 @@ impl Func for Callback {
         0
     }
 
-    fn call(&self, _params: &[Val]) -> Result<Box<[Val]>, Rc<Trap>> {
+    fn call(&self, _params: &[Val]) -> Result<Box<[Val]>, Trap> {
         println!("Hello, world!");
         Ok(Box::new([]))
     }

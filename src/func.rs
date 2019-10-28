@@ -25,7 +25,6 @@ impl<'a> InstanceFunction<'a> {
 }
 
 struct InstanceFunctionBody<'a> {
-    body: &'a wasmparser::FunctionBody<'a>,
     bytecode: BytecodeCache<'a>,
 }
 
@@ -33,7 +32,7 @@ impl<'a> InstanceFunctionBody<'a> {
     pub fn new(body: &'a wasmparser::FunctionBody<'a>) -> Self {
         let reader = body.get_operators_reader().expect("operators reader");
         let bytecode = BytecodeCache::new(reader);
-        InstanceFunctionBody { body, bytecode }
+        InstanceFunctionBody { bytecode }
     }
 }
 
@@ -64,7 +63,7 @@ impl<'a> Func for InstanceFunction<'a> {
         func_type.returns.len()
     }
 
-    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Rc<Trap>> {
+    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
         let module_data = Ref::map(self.instance_data.borrow(), |data| {
             data.module_data.as_ref()
         });
