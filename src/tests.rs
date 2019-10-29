@@ -159,11 +159,11 @@ where
 
     let mut context = Context::new();
     while let Some(Command { kind, line }) = parser.next().expect("parser") {
-        println!("line {}", line);
         if skip_test(filename, line) {
             println!("{}:{}: skipping", filename, line);
             continue;
         }
+        println!("line {}", line);
 
         match kind {
             CommandKind::Module { module, name } => {
@@ -264,10 +264,6 @@ fn run_spec_tests() {
                 // | ("table_fill.wast", _)
                 // | ("table_grow.wast", _)
                 | ("call.wast", 269) // stack
-                // br_table
-                | ("call.wast", 284) 
-                | ("call.wast", 285)
-                | ("local_get.wast", 125)
                  // call_indirect
                 | ("call.wast", 287)
                 | ("call.wast", 288)

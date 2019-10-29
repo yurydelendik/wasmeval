@@ -9,6 +9,12 @@ mod floats;
 
 const STACK_LIMIT: u32 = 10;
 
+fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
+    let i = table.len().min(i as usize);
+    let it = table.clone().into_iter();
+    it.skip(i).next().expect("valid br_table entry")
+}
+
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
@@ -154,7 +160,10 @@ pub(crate) fn eval<'a>(
                     break_to!(*relative_depth);
                 }
             }
-            Operator::BrTable { table } => unimplemented!("{:?}", operators[i]),
+            Operator::BrTable { table } => {
+                let i = pop!(i32);
+                break_to!(get_br_table_entry(table, i as u32));
+            }
             Operator::Return => {
                 break;
             }
@@ -294,13 +303,13 @@ pub(crate) fn eval<'a>(
             Operator::I32GeS => step!(|a:i32, b:i32| -> i32 if a >= b { 1 } else { 0 }),
             Operator::I32GeU => step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 }),
             Operator::I64Eqz => step!(|a:i64| -> i32 if a == 0 { 1 } else { 0 }),
-            Operator::I64Eq
-            | Operator::I64Ne
-            | Operator::I64LtS
-            | Operator::I64LtU
-            | Operator::I64GtS
-            | Operator::I64GtU
-            | Operator::I64LeS => unimplemented!("{:?}", operators[i]),
+            Operator::I64Eq => step!(|a:i64, b:i64| -> i32 if a == b { 1 } else { 0 }),
+            Operator::I64Ne => step!(|a:i64, b:i64| -> i32 if a == b { 0 } else { 1 }),
+            Operator::I64LtS => step!(|a:i64, b:i64| -> i32 if a < b { 1 } else { 0 }),
+            Operator::I64LtU => step!(|a:i64, b:i64| -> i32 if (a as u64) < b as u64 { 1 } else { 0 }),
+            Operator::I64GtS => step!(|a:i64, b:i64| -> i32 if a > b { 1 } else { 0 }),
+            Operator::I64GtU => step!(|a:i64, b:i64| -> i32 if (a as u64) > b as u64 { 1 } else { 0 }),
+            Operator::I64LeS => step!(|a:i64, b:i64| -> i32 if a <= b { 1 } else { 0 }),
             Operator::I64LeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
             Operator::I64GeS
             | Operator::I64GeU
@@ -394,13 +403,13 @@ pub(crate) fn eval<'a>(
             | Operator::F32ConvertUI32
             | Operator::F32ConvertSI64
             | Operator::F32ConvertUI64
-            | Operator::F32DemoteF64
-            | Operator::F64ConvertSI32
-            | Operator::F64ConvertUI32
-            | Operator::F64ConvertSI64
-            | Operator::F64ConvertUI64
-            | Operator::F64PromoteF32
-            | Operator::I32ReinterpretF32
+            | Operator::F32DemoteF64 => unimplemented!("{:?}", operators[i]),
+            Operator::F64ConvertSI32 => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
+            Operator::F64ConvertUI32 => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
+            Operator::F64ConvertSI64 => unimplemented!("{:?}", operators[i]),
+            Operator::F64ConvertUI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
+            Operator::F64PromoteF32 => step!(|a:f32| -> f64 floats::f32_to_f64(a)),
+            Operator::I32ReinterpretF32
             | Operator::I64ReinterpretF64
             | Operator::F32ReinterpretI32
             | Operator::F64ReinterpretI64
