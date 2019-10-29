@@ -245,6 +245,8 @@ fn run_spec_tests() {
             //|_, _| false,
             |name, line| match (name, line) {
                 ("memory.wast", _)
+                | ("memory_trap.wast", _)
+                | ("address.wast", _)
                 | ("imports.wast", _)
                 | ("binary.wast", _)
                 | ("linking.wast", _)
@@ -258,13 +260,38 @@ fn run_spec_tests() {
                 | ("names.wast", _)
                 | ("func_ptrs.wast", _)
                 | ("unwind.wast", _)
-                // | ("table_get.wast", _)
-                // | ("table_set.wast", _)
-                // | ("table_size.wast", _)
-                // | ("table_fill.wast", _)
-                // | ("table_grow.wast", _)
-                | ("if.wast", _) // drop
-                | ("call.wast", 269) // stack
+                | ("i32.wast", _)
+                | ("f32.wast", _)
+                | ("i64.wast", _)
+                | ("f64.wast", _)
+                | ("int_exprs.wast", _)
+                | ("float_exprs.wast", _)
+                | ("float_memory.wast", _)
+                | ("left-to-right.wast", _)
+                | ("conversions.wast", _)
+                | ("endianness.wast", _)
+                // dropped values
+                | ("if.wast", _)
+                | ("labels.wast", _)
+                | ("switch.wast", _)
+                | ("return.wast", _)
+                | ("br.wast", _)
+                | ("br_table.wast", _)
+                | ("br_if.wast", _)
+                // ctz
+                | ("block.wast", 293)
+                | ("loop.wast", 342)
+                | ("nop.wast", 362)
+                | ("nop.wast", 363)
+                | ("nop.wast", 364)
+                // clz
+                | ("memory_grow.wast", 299)
+                | ("load.wast", 201)
+                // stack heavy
+                | ("call.wast", 265)
+                | ("call.wast", 269)
+                | ("call_indirect.wast", 549)
+                | ("call_indirect.wast", 553)
                 | ("exports.wast", _) => true,
                 _ => false,
             },

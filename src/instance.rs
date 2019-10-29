@@ -139,7 +139,7 @@ impl<'a> Instance<'a> {
                 ExternalKind::Function => External::Func(data.funcs[index].clone()),
                 ExternalKind::Memory => External::Memory(data.memories[index].clone()),
                 ExternalKind::Global => External::Global(data.globals[index].clone()),
-                ExternalKind::Table => unimplemented!(),
+                ExternalKind::Table => External::Table(data.tables[index].clone()),
             });
         }
 

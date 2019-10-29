@@ -289,6 +289,84 @@ pub fn f64_to_u64(a: u64) -> i64 {
 }
 
 #[inline]
+pub fn eq_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a == b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn ne_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a == b {
+            0
+        } else {
+            1
+        }
+    }
+}
+
+#[inline]
+pub fn lt_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a < b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn gt_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a > b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn le_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a <= b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn ge_f32(a: u32, b: u32) -> i32 {
+    unsafe {
+        let a: f32 = transmute(a);
+        let b: f32 = transmute(b);
+        if a >= b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
 pub fn eq_f64(a: u64, b: u64) -> i32 {
     unsafe {
         let a: f64 = transmute(a);
