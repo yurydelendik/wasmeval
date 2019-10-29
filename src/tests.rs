@@ -244,14 +244,12 @@ fn run_spec_tests() {
             wabt_features,
             //|_, _| false,
             |name, line| match (name, line) {
-                ("memory.wast", _)
-                | ("start.wast", _)
+                ("start.wast", _)
                 | ("memory_trap.wast", _)
                 | ("address.wast", _)
                 | ("binary.wast", _)
                 | ("linking.wast", _)
                 | ("binary-leb128.wast", _)
-                | ("data.wast", _)
                 | ("unwind.wast", _)
                 | ("i32.wast", _)
                 | ("f32.wast", _)
@@ -270,6 +268,7 @@ fn run_spec_tests() {
                 | ("func_ptrs.wast", _)
                 | ("names.wast", 1095)
                 | ("names.wast", 1107)
+                | ("data.wast", _)
                 // dropped values
                 | ("if.wast", _)
                 | ("labels.wast", _)

@@ -1,7 +1,7 @@
 use failure::{bail, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::{ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
+use wasmparser::{DataKind, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
 
 use crate::eval::{eval_const, BytecodeCache, EvalContext, EvalSource};
 use crate::externals::{External, Func, Global, Memory, Table};
@@ -104,6 +104,22 @@ impl<'a> Instance<'a> {
         for i in 0..module_data.borrow().func_types.len() {
             let f: InstanceFunction<'a> = InstanceFunction::new(data.clone(), i);
             data.borrow_mut().funcs.push(Rc::new(RefCell::new(f)));
+        }
+
+        for chunk in module_data.borrow().data.iter() {
+            match chunk.kind {
+                DataKind::Active {
+                    memory_index,
+                    ref init_expr,
+                } => {
+                    let start = eval_init_expr(&data, init_expr).i32().unwrap() as u32;
+                    // TODO check boundaries
+                    data.borrow().memories[memory_index as usize]
+                        .borrow_mut()
+                        .clone_from_slice(start, chunk.data);
+                }
+                DataKind::Passive => (),
+            }
         }
 
         for element in module_data.borrow().elements.iter() {

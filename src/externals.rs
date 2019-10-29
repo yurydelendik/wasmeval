@@ -15,6 +15,7 @@ pub trait Memory {
     fn grow(&mut self, delta: u32) -> u32;
     fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32) -> *const u8;
     fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32) -> *mut u8;
+    fn clone_from_slice(&mut self, offset: u32, chunk: &[u8]);
 }
 
 pub trait Global {

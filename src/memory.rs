@@ -48,4 +48,8 @@ impl Memory for InstanceMemory {
         let offset = combine_offsets(memarg, offset) as usize;
         &mut self.buffer[offset]
     }
+    fn clone_from_slice(&mut self, offset: u32, chunk: &[u8]) {
+        let offset = offset as usize;
+        self.buffer[offset..(offset + chunk.len())].clone_from_slice(chunk);
+    }
 }
