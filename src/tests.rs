@@ -277,15 +277,6 @@ fn run_spec_tests() {
                 | ("br.wast", _)
                 | ("br_table.wast", _)
                 | ("br_if.wast", _)
-                // ctz
-                | ("block.wast", 293)
-                | ("loop.wast", 342)
-                | ("nop.wast", 362)
-                | ("nop.wast", 363)
-                | ("nop.wast", 364)
-                // clz
-                | ("memory_grow.wast", 299)
-                | ("load.wast", 201)
                 // stack heavy
                 | ("call.wast", 265)
                 | ("call.wast", 269)

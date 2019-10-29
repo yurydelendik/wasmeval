@@ -337,9 +337,9 @@ pub(crate) fn eval<'a>(
             Operator::F64Gt => step!(|a:f64, b:f64| -> i32 floats::gt_f64(a, b)),
             Operator::F64Le => step!(|a:f64, b:f64| -> i32 floats::le_f64(a, b)),
             Operator::F64Ge => step!(|a:f64, b:f64| -> i32 floats::ge_f64(a, b)),
-            Operator::I32Clz => unimplemented!("{:?}", operators[i]),
-            Operator::I32Ctz => unimplemented!("{:?}", operators[i]),
-            Operator::I32Popcnt => unimplemented!("{:?}", operators[i]),
+            Operator::I32Clz => step!(|a:i32| -> i32 a.leading_zeros() as i32),
+            Operator::I32Ctz => step!(|a:i32| -> i32 a.trailing_zeros() as i32),
+            Operator::I32Popcnt => step!(|a:i32| -> i32 a.count_ones() as i32),
             Operator::I32Add => step!(|a:i32, b:i32| -> i32 a.wrapping_add(b)),
             Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a.wrapping_sub(b)),
             Operator::I32Mul => step!(|a:i32, b:i32| -> i32 a.wrapping_mul(b)),
@@ -356,10 +356,10 @@ pub(crate) fn eval<'a>(
             | Operator::I32ShrS
             | Operator::I32ShrU
             | Operator::I32Rotl
-            | Operator::I32Rotr
-            | Operator::I64Clz
-            | Operator::I64Ctz
-            | Operator::I64Popcnt => unimplemented!("{:?}", operators[i]),
+            | Operator::I32Rotr => unimplemented!("{:?}", operators[i]),
+            Operator::I64Clz => step!(|a:i64| -> i32 a.leading_zeros() as i32),
+            Operator::I64Ctz => step!(|a:i64| -> i32 a.trailing_zeros() as i32),
+            Operator::I64Popcnt => step!(|a:i64| -> i32 a.count_ones() as i32),
             Operator::I64Add => step!(|a:i64, b:i64| -> i64 a.wrapping_add(b)),
             Operator::I64Sub => step!(|a:i64, b:i64| -> i64 a.wrapping_sub(b)),
             Operator::I64Mul => step!(|a:i64, b:i64| -> i64 a.wrapping_mul(b)),
