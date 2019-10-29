@@ -277,3 +277,91 @@ pub fn i32_to_f64(a: i32) -> u64 {
         transmute(c)
     }
 }
+
+#[inline]
+pub fn f64_to_i64(a: u64) -> i64 {
+    unsafe { transmute::<_, f64>(a) as i64 }
+}
+
+#[inline]
+pub fn f64_to_u64(a: u64) -> i64 {
+    unsafe { transmute::<_, f64>(a) as u64 as i64 }
+}
+
+#[inline]
+pub fn eq_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a == b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn ne_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a == b {
+            0
+        } else {
+            1
+        }
+    }
+}
+
+#[inline]
+pub fn lt_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a < b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn gt_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a > b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn le_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a <= b {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[inline]
+pub fn ge_f64(a: u64, b: u64) -> i32 {
+    unsafe {
+        let a: f64 = transmute(a);
+        let b: f64 = transmute(b);
+        if a >= b {
+            1
+        } else {
+            0
+        }
+    }
+}

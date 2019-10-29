@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 pub struct InstanceTable<'a> {
     entries: Vec<Option<Rc<RefCell<dyn Func + 'a>>>>,
+    #[allow(dead_code)]
     max: usize,
 }
 

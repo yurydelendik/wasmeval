@@ -7,6 +7,7 @@ mod bytecode;
 mod context;
 mod floats;
 
+#[allow(dead_code)]
 const STACK_LIMIT: u32 = 10;
 
 fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
@@ -181,14 +182,7 @@ pub(crate) fn eval<'a>(
             }
             Operator::Call { function_index } => {
                 let f = context.get_function(*function_index);
-                let params = stack.split_off(stack.len() - f.borrow().params_arity());
-                let result = f.borrow().call(&params);
-                match result {
-                    Ok(returns) => stack.extend_from_slice(&returns),
-                    Err(trap) => {
-                        return Err(trap);
-                    }
-                }
+                call!(f)
             }
             Operator::CallIndirect { index, table_index } => {
                 let func_index = pop!(i32) as u32;
@@ -329,23 +323,23 @@ pub(crate) fn eval<'a>(
             Operator::I64GtU => step!(|a:i64, b:i64| -> i32 if (a as u64) > b as u64 { 1 } else { 0 }),
             Operator::I64LeS => step!(|a:i64, b:i64| -> i32 if a <= b { 1 } else { 0 }),
             Operator::I64LeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
-            Operator::I64GeS
-            | Operator::I64GeU
-            | Operator::F32Eq
+            Operator::I64GeS => step!(|a:i64, b:i64| -> i32 if a >= b { 1 } else { 0 }),
+            Operator::I64GeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
+            Operator::F32Eq
             | Operator::F32Ne
             | Operator::F32Lt
             | Operator::F32Gt
             | Operator::F32Le
-            | Operator::F32Ge
-            | Operator::F64Eq
-            | Operator::F64Ne
-            | Operator::F64Lt
-            | Operator::F64Gt
-            | Operator::F64Le
-            | Operator::F64Ge
-            | Operator::I32Clz
-            | Operator::I32Ctz
-            | Operator::I32Popcnt => unimplemented!("{:?}", operators[i]),
+            | Operator::F32Ge => unimplemented!("{:?}", operators[i]),
+            Operator::F64Eq => step!(|a:f64, b:f64| -> i32 floats::eq_f64(a, b)),
+            Operator::F64Ne => step!(|a:f64, b:f64| -> i32 floats::ne_f64(a, b)),
+            Operator::F64Lt => step!(|a:f64, b:f64| -> i32 floats::lt_f64(a, b)),
+            Operator::F64Gt => step!(|a:f64, b:f64| -> i32 floats::gt_f64(a, b)),
+            Operator::F64Le => step!(|a:f64, b:f64| -> i32 floats::le_f64(a, b)),
+            Operator::F64Ge => step!(|a:f64, b:f64| -> i32 floats::ge_f64(a, b)),
+            Operator::I32Clz => unimplemented!("{:?}", operators[i]),
+            Operator::I32Ctz => unimplemented!("{:?}", operators[i]),
+            Operator::I32Popcnt => unimplemented!("{:?}", operators[i]),
             Operator::I32Add => step!(|a:i32, b:i32| -> i32 a.wrapping_add(b)),
             Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a.wrapping_sub(b)),
             Operator::I32Mul | Operator::I32DivS | Operator::I32DivU | Operator::I32RemS => unimplemented!(),
@@ -412,12 +406,12 @@ pub(crate) fn eval<'a>(
             | Operator::I32TruncSF64
             | Operator::I32TruncUF64 => unimplemented!("{:?}", operators[i]),
             Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
-            Operator::I64ExtendUI32
-            | Operator::I64TruncSF32
-            | Operator::I64TruncUF32
-            | Operator::I64TruncSF64
-            | Operator::I64TruncUF64
-            | Operator::F32ConvertSI32
+            Operator::I64ExtendUI32 | Operator::I64TruncSF32 | Operator::I64TruncUF32 => {
+                unimplemented!("{:?}", operators[i])
+            }
+            Operator::I64TruncSF64 => step!(|a:f64| -> i64 floats::f64_to_i64(a)),
+            Operator::I64TruncUF64 => step!(|a:f64| -> i64 floats::f64_to_u64(a)),
+            Operator::F32ConvertSI32
             | Operator::F32ConvertUI32
             | Operator::F32ConvertSI64
             | Operator::F32ConvertUI64
@@ -427,11 +421,11 @@ pub(crate) fn eval<'a>(
             Operator::F64ConvertSI64 => unimplemented!("{:?}", operators[i]),
             Operator::F64ConvertUI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
             Operator::F64PromoteF32 => step!(|a:f32| -> f64 floats::f32_to_f64(a)),
-            Operator::I32ReinterpretF32
-            | Operator::I64ReinterpretF64
-            | Operator::F32ReinterpretI32
-            | Operator::F64ReinterpretI64
-            | Operator::I32TruncSSatF32
+            Operator::I32ReinterpretF32 => step!(|a:f32| -> i32 a as i32),
+            Operator::I64ReinterpretF64 => step!(|a:f64| -> i64 a as i64),
+            Operator::F32ReinterpretI32 => step!(|a:i32| -> f32 a as u32),
+            Operator::F64ReinterpretI64 => step!(|a:i64| -> f64 a as u64),
+            Operator::I32TruncSSatF32
             | Operator::I32TruncUSatF32
             | Operator::I32TruncSSatF64
             | Operator::I32TruncUSatF64

@@ -1,7 +1,7 @@
 use failure::{bail, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::{Element, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
+use wasmparser::{ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
 
 use crate::eval::{eval_const, BytecodeCache, EvalContext, EvalSource};
 use crate::externals::{External, Func, Global, Memory, Table};

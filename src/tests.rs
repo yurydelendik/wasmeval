@@ -263,6 +263,7 @@ fn run_spec_tests() {
                 // | ("table_size.wast", _)
                 // | ("table_fill.wast", _)
                 // | ("table_grow.wast", _)
+                | ("if.wast", _) // drop
                 | ("call.wast", 269) // stack
                 | ("exports.wast", _) => true,
                 _ => false,
