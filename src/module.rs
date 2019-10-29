@@ -127,7 +127,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
             _ => (),
         }
     }
-    let types = types.expect("types").into_boxed_slice();
+    let types = types.unwrap_or_else(|| vec![]).into_boxed_slice();
     let imports = imports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let exports = exports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let memories = memories.unwrap_or_else(|| vec![]).into_boxed_slice();

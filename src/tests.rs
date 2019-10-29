@@ -245,20 +245,13 @@ fn run_spec_tests() {
             //|_, _| false,
             |name, line| match (name, line) {
                 ("memory.wast", _)
+                | ("start.wast", _)
                 | ("memory_trap.wast", _)
                 | ("address.wast", _)
-                | ("imports.wast", _)
                 | ("binary.wast", _)
                 | ("linking.wast", _)
-                | ("globals.wast", _)
-                | ("comments.wast", _)
                 | ("binary-leb128.wast", _)
-                | ("elem.wast", _)
                 | ("data.wast", _)
-                | ("custom.wast", _)
-                | ("start.wast", _)
-                | ("names.wast", _)
-                | ("func_ptrs.wast", _)
                 | ("unwind.wast", _)
                 | ("i32.wast", _)
                 | ("f32.wast", _)
@@ -270,6 +263,13 @@ fn run_spec_tests() {
                 | ("left-to-right.wast", _)
                 | ("conversions.wast", _)
                 | ("endianness.wast", _)
+                // imports
+                | ("imports.wast", _)
+                | ("globals.wast", 301)
+                | ("elem.wast", _)
+                | ("func_ptrs.wast", _)
+                | ("names.wast", 1095)
+                | ("names.wast", 1107)
                 // dropped values
                 | ("if.wast", _)
                 | ("labels.wast", _)
@@ -291,8 +291,7 @@ fn run_spec_tests() {
                 | ("call.wast", 265)
                 | ("call.wast", 269)
                 | ("call_indirect.wast", 549)
-                | ("call_indirect.wast", 553)
-                | ("exports.wast", _) => true,
+                | ("call_indirect.wast", 553) => true,
                 _ => false,
             },
         );
