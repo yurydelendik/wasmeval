@@ -1,4 +1,4 @@
-pub use crate::externals::{External, Func};
+pub use crate::externals::{External, Func, Memory, Table};
 pub use crate::instance::Instance;
 pub use crate::memory::InstanceMemory;
 pub use crate::module::Module;
@@ -11,6 +11,7 @@ mod global;
 mod instance;
 mod memory;
 mod module;
+mod table;
 mod values;
 
 #[cfg(test)]

@@ -3,7 +3,8 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
-    Export, FuncType, FunctionBody, Global, Import, MemoryType, ModuleReader, SectionCode,
+    Data, Element, Export, FuncType, FunctionBody, Global, Import, MemoryType, ModuleReader,
+    SectionCode, TableType,
 };
 
 pub(crate) struct ModuleData<'a> {
@@ -12,6 +13,9 @@ pub(crate) struct ModuleData<'a> {
     pub imports: Box<[Import<'a>]>,
     pub exports: Box<[Export<'a>]>,
     pub memories: Box<[MemoryType]>,
+    pub data: Box<[Data<'a>]>,
+    pub tables: Box<[TableType]>,
+    pub elements: Box<[Element<'a>]>,
     pub globals: Box<[Global<'a>]>,
     pub func_types: Box<[u32]>,
     pub func_bodies: Box<[FunctionBody<'a>]>,
@@ -30,6 +34,9 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     let mut imports = None;
     let mut exports = None;
     let mut memories = None;
+    let mut data = None;
+    let mut tables = None;
+    let mut elements = None;
     let mut globals = None;
     let mut func_types = None;
     let mut func_bodies = None;
@@ -68,6 +75,14 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
+            SectionCode::Table => {
+                tables = Some(
+                    section
+                        .get_table_section_reader()?
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
             SectionCode::Global => {
                 globals = Some(
                     section
@@ -92,6 +107,23 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
+            SectionCode::Data => {
+                data = Some(
+                    section
+                        .get_data_section_reader()?
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
+            SectionCode::Element => {
+                elements = Some(
+                    section
+                        .get_element_section_reader()?
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
+
             _ => (),
         }
     }
@@ -99,6 +131,9 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     let imports = imports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let exports = exports.unwrap_or_else(|| vec![]).into_boxed_slice();
     let memories = memories.unwrap_or_else(|| vec![]).into_boxed_slice();
+    let data = data.unwrap_or_else(|| vec![]).into_boxed_slice();
+    let tables = tables.unwrap_or_else(|| vec![]).into_boxed_slice();
+    let elements = elements.unwrap_or_else(|| vec![]).into_boxed_slice();
     let globals = globals.unwrap_or_else(|| vec![]).into_boxed_slice();
     let func_types = func_types.unwrap_or_else(|| vec![]).into_boxed_slice();
     let func_bodies = func_bodies.unwrap_or_else(|| vec![]).into_boxed_slice();
@@ -108,6 +143,9 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
         imports,
         exports,
         memories,
+        data,
+        tables,
+        elements,
         globals,
         func_types,
         func_bodies,

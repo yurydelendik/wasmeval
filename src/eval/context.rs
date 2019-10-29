@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use crate::externals::{Func, Global, Memory};
+use crate::externals::{Func, Global, Memory, Table};
 use crate::instance::InstanceData;
 use crate::values::Val;
 
@@ -24,6 +24,9 @@ impl<'a> EvalContext<'a> {
     pub fn get_memory(&self) -> Ref<Rc<RefCell<dyn Memory>>> {
         const INDEX: usize = 0;
         Ref::map(self.instance_data.borrow(), |i| &i.memories[INDEX])
+    }
+    pub fn get_table(&self, index: u32) -> Ref<Rc<RefCell<dyn Table<'a> + 'a>>> {
+        Ref::map(self.instance_data.borrow(), |i| &i.tables[index as usize])
     }
 }
 

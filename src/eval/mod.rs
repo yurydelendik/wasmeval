@@ -126,6 +126,18 @@ pub(crate) fn eval<'a>(
             continue;
         }};
     }
+    macro_rules! call {
+        ($f:expr) => {{
+            let params = stack.split_off(stack.len() - $f.borrow().params_arity());
+            let result = $f.borrow().call(&params);
+            match result {
+                Ok(returns) => stack.extend_from_slice(&returns),
+                Err(trap) => {
+                    return Err(trap);
+                }
+            }
+        }};
+    }
 
     // TODO validate stack state
     // TODO handle traps
@@ -178,7 +190,13 @@ pub(crate) fn eval<'a>(
                     }
                 }
             }
-            Operator::CallIndirect { index, table_index } => unimplemented!("{:?}", operators[i]),
+            Operator::CallIndirect { index, table_index } => {
+                let func_index = pop!(i32) as u32;
+                let table = context.get_table(*table_index);
+                // TODO check type index and func
+                let f = table.borrow().get_func(func_index);
+                call!(f)
+            }
             Operator::Drop => {
                 stack.pop().unwrap();
             }

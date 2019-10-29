@@ -264,9 +264,6 @@ fn run_spec_tests() {
                 // | ("table_fill.wast", _)
                 // | ("table_grow.wast", _)
                 | ("call.wast", 269) // stack
-                 // call_indirect
-                | ("call.wast", 287)
-                | ("call.wast", 288)
                 | ("exports.wast", _) => true,
                 _ => false,
             },
