@@ -70,7 +70,27 @@ impl From<wasmparser::Type> for ValType {
 }
 
 #[derive(Debug)]
-pub struct Trap;
+#[allow(dead_code)]
+pub enum TrapKind {
+    Unreachable,
+    OutOfBounds,
+    SignatureMismatch,
+    DivisionByZeroOrOverflow,
+    FloatTrancation,
+    User(String),
+}
+
+#[derive(Debug)]
+pub struct Trap {
+    kind: TrapKind,
+    position: usize,
+}
+
+impl Trap {
+    pub fn new(kind: TrapKind, position: usize) -> Self {
+        Trap { kind, position }
+    }
+}
 
 pub fn get_default_value(ty: ValType) -> Val {
     match ty {

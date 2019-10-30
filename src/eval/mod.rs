@@ -1,4 +1,4 @@
-use crate::values::{Trap, Val};
+use crate::values::{Trap, TrapKind, Val};
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 pub(crate) use context::{EvalContext, Frame, Local};
@@ -163,12 +163,26 @@ pub(crate) fn eval<'a>(
             let params = stack.split_off(stack.len() - $f.borrow().params_arity());
             let result = $f.borrow().call(&params);
             match result {
-                Ok(returns) => stack.extend_from_slice(&returns),
+                Ok(returns) => {
+                    // TODO better signature check
+                    if $f.borrow().results_arity() != returns.len() {
+                        return Err(Trap::new(TrapKind::SignatureMismatch, bytecode.position(i)));
+                    }
+                    stack.extend_from_slice(&returns)
+                }
                 Err(trap) => {
                     return Err(trap);
                 }
             }
         }};
+    }
+    macro_rules! op_notimpl {
+        () => {
+            return Err(Trap::new(
+                TrapKind::User(format!("operator not implemented {:?}", operators[i])),
+                bytecode.position(i),
+            ));
+        };
     }
 
     // TODO validate stack state
@@ -177,7 +191,7 @@ pub(crate) fn eval<'a>(
     while i < operators.len() {
         match &operators[i] {
             Operator::Unreachable => {
-                return Err(Trap);
+                return Err(Trap::new(TrapKind::Unreachable, bytecode.position(i)));
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
@@ -225,10 +239,12 @@ pub(crate) fn eval<'a>(
                 let table = context.get_table(*table_index);
                 let ty = context.get_type(*index);
                 let f = table.borrow().get_func(func_index);
-                debug_assert!(
-                    f.borrow().params_arity() == ty.ty().params.len()
-                        && f.borrow().results_arity() == ty.ty().returns.len()
-                );
+                // TODO detailed signature check
+                if f.borrow().params_arity() != ty.ty().params.len()
+                    || f.borrow().results_arity() != ty.ty().returns.len()
+                {
+                    return Err(Trap::new(TrapKind::SignatureMismatch, bytecode.position(i)));
+                }
                 call!(f)
             }
             Operator::Drop => {
@@ -453,17 +469,15 @@ pub(crate) fn eval<'a>(
             Operator::I32TruncSF32
             | Operator::I32TruncUF32
             | Operator::I32TruncSF64
-            | Operator::I32TruncUF64 => unimplemented!("{:?}", operators[i]),
+            | Operator::I32TruncUF64 => op_notimpl!(),
             Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
             Operator::I64ExtendUI32 => step!(|a:i32| -> i64 (a as u32 as i64)),
-            Operator::I64TruncSF32 | Operator::I64TruncUF32 => unimplemented!("{:?}", operators[i]),
+            Operator::I64TruncSF32 | Operator::I64TruncUF32 => op_notimpl!(),
             Operator::I64TruncSF64 => step!(|a:f64| -> i64 floats::f64_to_i64(a)),
             Operator::I64TruncUF64 => step!(|a:f64| -> i64 floats::f64_to_u64(a)),
             Operator::F32ConvertSI32 => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
             Operator::F32ConvertUI32 => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
-            Operator::F32ConvertSI64 | Operator::F32ConvertUI64 | Operator::F32DemoteF64 => {
-                unimplemented!("{:?}", operators[i])
-            }
+            Operator::F32ConvertSI64 | Operator::F32ConvertUI64 | Operator::F32DemoteF64 => op_notimpl!(),
             Operator::F64ConvertSI32 => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
             Operator::F64ConvertUI32 => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
             Operator::F64ConvertSI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
@@ -485,7 +499,7 @@ pub(crate) fn eval<'a>(
             | Operator::I32Extend8S
             | Operator::I64Extend32S
             | Operator::I64Extend16S
-            | Operator::I64Extend8S => unimplemented!("{:?}", operators[i]),
+            | Operator::I64Extend8S => op_notimpl!(),
             Operator::I32AtomicLoad { .. }
             | Operator::I32AtomicLoad16U { .. }
             | Operator::I32AtomicLoad8U { .. }
@@ -551,19 +565,17 @@ pub(crate) fn eval<'a>(
             | Operator::I64AtomicRmw8UCmpxchg { .. }
             | Operator::Wake { .. }
             | Operator::I32Wait { .. }
-            | Operator::I64Wait { .. } => unimplemented!("{:?}", operators[i]),
-            Operator::Fence { ref flags } => unimplemented!("{:?}", operators[i]),
-            Operator::RefNull | Operator::RefIsNull => unimplemented!("{:?}", operators[i]),
-            Operator::V128Load { .. } | Operator::V128Store { .. } => {
-                unimplemented!("{:?}", operators[i])
-            }
+            | Operator::I64Wait { .. } => op_notimpl!(),
+            Operator::Fence { ref flags } => op_notimpl!(),
+            Operator::RefNull | Operator::RefIsNull => op_notimpl!(),
+            Operator::V128Load { .. } | Operator::V128Store { .. } => op_notimpl!(),
             Operator::V128Const { .. }
             | Operator::I8x16Splat
             | Operator::I16x8Splat
             | Operator::I32x4Splat
             | Operator::I64x2Splat
             | Operator::F32x4Splat
-            | Operator::F64x2Splat => unimplemented!("{:?}", operators[i]),
+            | Operator::F64x2Splat => op_notimpl!(),
             Operator::I8x16ExtractLaneS { lane }
             | Operator::I8x16ExtractLaneU { lane }
             | Operator::I16x8ExtractLaneS { lane }
@@ -577,7 +589,7 @@ pub(crate) fn eval<'a>(
             | Operator::F32x4ExtractLane { lane }
             | Operator::F32x4ReplaceLane { lane }
             | Operator::F64x2ExtractLane { lane }
-            | Operator::F64x2ReplaceLane { lane } => unimplemented!("{:?}", operators[i]),
+            | Operator::F64x2ReplaceLane { lane } => op_notimpl!(),
             Operator::F32x4Eq
             | Operator::F32x4Ne
             | Operator::F32x4Lt
@@ -694,22 +706,22 @@ pub(crate) fn eval<'a>(
             | Operator::I64x2Shl
             | Operator::I64x2ShrS
             | Operator::I64x2ShrU
-            | Operator::V8x16Swizzle => unimplemented!("{:?}", operators[i]),
-            Operator::V8x16Shuffle { ref lanes } => unimplemented!("{:?}", operators[i]),
+            | Operator::V8x16Swizzle => op_notimpl!(),
+            Operator::V8x16Shuffle { ref lanes } => op_notimpl!(),
             Operator::I8x16LoadSplat { .. }
             | Operator::I16x8LoadSplat { .. }
             | Operator::I32x4LoadSplat { .. }
-            | Operator::I64x2LoadSplat { .. } => unimplemented!("{:?}", operators[i]),
-            Operator::MemoryCopy | Operator::MemoryFill => unimplemented!("{:?}", operators[i]),
+            | Operator::I64x2LoadSplat { .. } => op_notimpl!(),
+            Operator::MemoryCopy | Operator::MemoryFill => op_notimpl!(),
             Operator::MemoryInit { segment }
             | Operator::DataDrop { segment }
             | Operator::TableInit { segment }
-            | Operator::ElemDrop { segment } => unimplemented!("{:?}", operators[i]),
-            Operator::TableCopy => unimplemented!("{:?}", operators[i]),
+            | Operator::ElemDrop { segment } => op_notimpl!(),
+            Operator::TableCopy => op_notimpl!(),
             Operator::TableGet { table }
             | Operator::TableSet { table }
             | Operator::TableGrow { table }
-            | Operator::TableSize { table } => unimplemented!("{:?}", operators[i]),
+            | Operator::TableSize { table } => op_notimpl!(),
         }
         i += 1;
     }

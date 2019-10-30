@@ -113,6 +113,11 @@ impl<'a> BytecodeCache<'a> {
     pub fn operators(&self) -> &[Operator] {
         &self.operators
     }
+
+    pub fn position(&self, i: usize) -> usize {
+        // TODO real bytecode position
+        i
+    }
 }
 
 pub(crate) trait EvalSource {

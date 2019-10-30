@@ -1,4 +1,4 @@
-use failure::{bail, Error};
+use failure::{bail, format_err, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmparser::{DataKind, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
@@ -162,7 +162,10 @@ impl<'a> Instance<'a> {
         if let Some(start_func) = module_data.borrow().start_func {
             let f = data.borrow().funcs[start_func as usize].clone();
             debug_assert!(f.borrow().params_arity() == 0 && f.borrow().results_arity() == 0);
-            f.borrow().call(&[]).unwrap();
+            // TODO handle better start's trap
+            f.borrow()
+                .call(&[])
+                .map_err(|_trap| format_err!("start function trapped"))?;
         }
 
         Ok(Instance { data, exports })

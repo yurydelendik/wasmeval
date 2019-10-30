@@ -261,6 +261,9 @@ where
             }
             CommandKind::AssertReturn { action, expected } => {
                 let result = preform_action(&context, action);
+                if let Err(trap) = result {
+                    panic!("{}:{}: trap was found {:?}", filename, line, trap);
+                }
                 let returns = result.ok().unwrap();
                 assert!(
                     returns.len() == expected.len(),
@@ -282,8 +285,12 @@ where
                     );
                 }
             }
-            CommandKind::AssertTrap { .. }
-            | CommandKind::AssertExhaustion { .. }
+            CommandKind::AssertTrap { .. } => {
+                // let result = preform_action(&context, action);
+                // let _err = result.err().unwrap();
+                // TODO check message
+            }
+            CommandKind::AssertExhaustion { .. }
             | CommandKind::AssertReturnCanonicalNan { .. }
             | CommandKind::AssertReturnArithmeticNan { .. } => (),
         }
