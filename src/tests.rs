@@ -285,9 +285,12 @@ where
                     );
                 }
             }
-            CommandKind::AssertTrap { .. } => {
-                // let result = preform_action(&context, action);
-                // let _err = result.err().unwrap();
+            CommandKind::AssertTrap { action, message } => {
+                let result = preform_action(&context, action);
+                if let Ok(_) = result {
+                    panic!("{}:{}: trap is expected: {}", filename, line, message);
+                }
+                let _err = result.err().unwrap();
                 // TODO check message
             }
             CommandKind::AssertExhaustion { .. }
@@ -319,16 +322,26 @@ fn run_spec_tests() {
             //|_, _| false,
             |name, line| match (name, line) {
                 ("linking.wast", _)
-                | ("i32.wast", 107) // div 0
-                | ("i32.wast", 174) // div 0
-                | ("f32.wast", 1621) // -0.0
+                // invalid conversion to integer
+                | ("traps.wast", 56)
+                | ("traps.wast", 57)
+                // -0.0
+                | ("f32.wast", 1621)
+                | ("f64.wast", 1621)
                 | ("f32.wast", 2020)
-                | ("i64.wast", 107) // div 0
-                | ("i64.wast", 174) // div 0
-                | ("f64.wast", 1621)  // -0.0
                 | ("f64.wast", 2020)
                 | ("float_exprs.wast", _)
                 | ("conversions.wast", _)
+                // type mismatch
+                | ("call_indirect.wast", 470)
+                | ("call_indirect.wast", 480)
+                | ("call_indirect.wast", 487)
+                | ("call_indirect.wast", 494)
+                | ("imports.wast", 283)
+                | ("imports.wast", 286)
+                | ("imports.wast", 302)
+                | ("imports.wast", 305)
+                | ("elem.wast", 353)
                 // stack "heavy"
                 | ("call.wast", 265)
                 | ("call.wast", 266)

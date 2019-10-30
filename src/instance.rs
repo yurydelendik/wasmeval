@@ -140,7 +140,8 @@ impl<'a> Instance<'a> {
                         let f = data.borrow().funcs[index as usize].clone();
                         data.borrow().tables[table_index as usize]
                             .borrow_mut()
-                            .set_func(start + i as u32, f);
+                            .set_func(start + i as u32, f)
+                            .expect("element set out-of-bounds");
                     }
                 }
                 ElementKind::Passive(_) => (),

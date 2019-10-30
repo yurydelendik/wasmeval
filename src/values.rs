@@ -75,7 +75,8 @@ pub enum TrapKind {
     Unreachable,
     OutOfBounds,
     SignatureMismatch,
-    DivisionByZeroOrOverflow,
+    DivisionByZero,
+    Overflow,
     FloatTrancation,
     User(String),
 }

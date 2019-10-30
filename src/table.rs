@@ -1,4 +1,4 @@
-use crate::externals::{Func, Table};
+use crate::externals::{Func, Table, TableOutOfBounds};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -18,11 +18,24 @@ impl<'a> InstanceTable<'a> {
 }
 
 impl<'a> Table<'a> for InstanceTable<'a> {
-    fn get_func(&self, index: u32) -> Rc<RefCell<dyn Func + 'a>> {
-        self.entries[index as usize].as_ref().unwrap().clone()
+    fn get_func(&self, index: u32) -> Result<Rc<RefCell<dyn Func + 'a>>, TableOutOfBounds> {
+        if (index as usize) < self.entries.len() {
+            Ok(self.entries[index as usize].as_ref().unwrap().clone())
+        } else {
+            Err(TableOutOfBounds)
+        }
     }
 
-    fn set_func(&mut self, index: u32, f: Rc<RefCell<dyn Func + 'a>>) {
-        self.entries[index as usize] = Some(f);
+    fn set_func(
+        &mut self,
+        index: u32,
+        f: Rc<RefCell<dyn Func + 'a>>,
+    ) -> Result<(), TableOutOfBounds> {
+        if (index as usize) < self.entries.len() {
+            self.entries[index as usize] = Some(f);
+            Ok(())
+        } else {
+            Err(TableOutOfBounds)
+        }
     }
 }

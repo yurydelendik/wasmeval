@@ -22,8 +22,8 @@ impl InstanceMemory {
 }
 
 #[inline]
-fn combine_offsets(memarg: &MemoryImmediate, offset: u32) -> u32 {
-    memarg.offset.wrapping_add(offset)
+fn combine_offsets(memarg: &MemoryImmediate, offset: u32) -> usize {
+    memarg.offset as usize + offset as usize
 }
 
 impl Memory for InstanceMemory {
@@ -40,12 +40,18 @@ impl Memory for InstanceMemory {
         self.buffer.resize(new_len, 0);
         old_len
     }
-    fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32) -> *const u8 {
-        let offset = combine_offsets(memarg, offset) as usize;
+    fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *const u8 {
+        let offset = combine_offsets(memarg, offset);
+        if offset + size as usize > self.buffer.len() {
+            return std::ptr::null();
+        }
         &self.buffer[offset]
     }
-    fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32) -> *mut u8 {
-        let offset = combine_offsets(memarg, offset) as usize;
+    fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *mut u8 {
+        let offset = combine_offsets(memarg, offset);
+        if offset + size as usize > self.buffer.len() {
+            return std::ptr::null_mut();
+        }
         &mut self.buffer[offset]
     }
     fn clone_from_slice(&mut self, offset: u32, chunk: &[u8]) {

@@ -57,6 +57,20 @@ pub(crate) fn eval<'a>(
             Val::F64
         };
     }
+    macro_rules! val_size {
+        (i32) => {
+            4
+        };
+        (i64) => {
+            8
+        };
+        (f32) => {
+            4
+        };
+        (f64) => {
+            8
+        };
+    }
     macro_rules! rust_ty {
         (i32) => {
             i32
@@ -81,6 +95,11 @@ pub(crate) fn eval<'a>(
             stack.pop().unwrap().$ty().unwrap()
         };
     }
+    macro_rules! trap {
+        ($kind:expr) => {
+            return Err(Trap::new($kind, bytecode.position(i)));
+        };
+    }
     macro_rules! step {
         (|$a:ident: $ty_a:ident| -> $ty:ident $e:expr) => {{
             let $a = pop!($ty_a);
@@ -98,7 +117,10 @@ pub(crate) fn eval<'a>(
             let ptr = context
                 .get_memory()
                 .borrow_mut()
-                .content_ptr($memarg, offset);
+                .content_ptr($memarg, offset, val_size!($ty));
+            if ptr.is_null() {
+                trap!(TrapKind::OutOfBounds);
+            }
             let val = unsafe { *(ptr as *const rust_ty!($ty)) };
             push!(val; $ty);
         }};
@@ -107,7 +129,10 @@ pub(crate) fn eval<'a>(
             let ptr = context
                 .get_memory()
                 .borrow_mut()
-                .content_ptr($memarg, offset);
+                .content_ptr($memarg, offset, std::mem::size_of::<$tt>() as u32);
+            if ptr.is_null() {
+                trap!(TrapKind::OutOfBounds);
+            }
             let val = unsafe { *(ptr as *const $tt) } as rust_ty!($ty);
             push!(val; $ty);
         }};
@@ -116,10 +141,14 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident) => {{
             let val = pop!($ty);
             let offset = pop!(i32) as u32;
-            let ptr = context
-                .get_memory()
-                .borrow_mut()
-                .content_ptr_mut($memarg, offset);
+            let ptr =
+                context
+                    .get_memory()
+                    .borrow_mut()
+                    .content_ptr_mut($memarg, offset, val_size!($ty));
+            if ptr.is_null() {
+                trap!(TrapKind::OutOfBounds);
+            }
             unsafe {
                 *(ptr as *mut rust_ty!($ty)) = val;
             }
@@ -127,10 +156,14 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let val = pop!($ty) as $tt;
             let offset = pop!(i32) as u32;
-            let ptr = context
-                .get_memory()
-                .borrow_mut()
-                .content_ptr_mut($memarg, offset);
+            let ptr = context.get_memory().borrow_mut().content_ptr_mut(
+                $memarg,
+                offset,
+                std::mem::size_of::<$tt>() as u32,
+            );
+            if ptr.is_null() {
+                trap!(TrapKind::OutOfBounds);
+            }
             unsafe {
                 *(ptr as *mut $tt) = val;
             }
@@ -166,7 +199,7 @@ pub(crate) fn eval<'a>(
                 Ok(returns) => {
                     // TODO better signature check
                     if $f.borrow().results_arity() != returns.len() {
-                        return Err(Trap::new(TrapKind::SignatureMismatch, bytecode.position(i)));
+                        trap!(TrapKind::SignatureMismatch);
                     }
                     stack.extend_from_slice(&returns)
                 }
@@ -178,10 +211,10 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! op_notimpl {
         () => {
-            return Err(Trap::new(
-                TrapKind::User(format!("operator not implemented {:?}", operators[i])),
-                bytecode.position(i),
-            ));
+            trap!(TrapKind::User(format!(
+                "operator not implemented {:?}",
+                operators[i]
+            )));
         };
     }
 
@@ -191,7 +224,7 @@ pub(crate) fn eval<'a>(
     while i < operators.len() {
         match &operators[i] {
             Operator::Unreachable => {
-                return Err(Trap::new(TrapKind::Unreachable, bytecode.position(i)));
+                trap!(TrapKind::Unreachable);
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
@@ -238,12 +271,15 @@ pub(crate) fn eval<'a>(
                 let func_index = pop!(i32) as u32;
                 let table = context.get_table(*table_index);
                 let ty = context.get_type(*index);
-                let f = table.borrow().get_func(func_index);
+                let f = match table.borrow().get_func(func_index) {
+                    Ok(f) => f,
+                    Err(_) => trap!(TrapKind::OutOfBounds),
+                };
                 // TODO detailed signature check
                 if f.borrow().params_arity() != ty.ty().params.len()
                     || f.borrow().results_arity() != ty.ty().returns.len()
                 {
-                    return Err(Trap::new(TrapKind::SignatureMismatch, bytecode.position(i)));
+                    trap!(TrapKind::SignatureMismatch);
                 }
                 call!(f)
             }
@@ -399,12 +435,49 @@ pub(crate) fn eval<'a>(
             Operator::I32Add => step!(|a:i32, b:i32| -> i32 a.wrapping_add(b)),
             Operator::I32Sub => step!(|a:i32, b:i32| -> i32 a.wrapping_sub(b)),
             Operator::I32Mul => step!(|a:i32, b:i32| -> i32 a.wrapping_mul(b)),
-            Operator::I32DivS => step!(|a:i32, b:i32| -> i32 a / b),
-            Operator::I32DivU => step!(|a:i32, b:i32| -> i32 ((a as u32) / (b as u32)) as i32),
-            Operator::I32RemS => step!(|a: i32, b: i32| -> i32 a % b),
-            Operator::I32RemU => {
-                step!(|a: i32, b: i32| -> i32 { ((a as u32) % (b as u32)) as i32 })
-            }
+            Operator::I32DivS => step!(|a: i32, b: i32| -> i32 {
+                if let Some(c) = a.checked_div(b) {
+                    c
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
+            Operator::I32DivU => step!(|a: i32, b: i32| -> i32 {
+                if let Some(c) = (a as u32).checked_div(b as u32) {
+                    c as i32
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
+            Operator::I32RemS => step!(|a: i32, b: i32| -> i32 {
+                if let Some(c) = a.checked_rem(b) {
+                    c
+                } else if b == 0 {
+                    trap!(TrapKind::DivisionByZero);
+                } else {
+                    assert!(b == -1);
+                    0
+                }
+            }),
+            Operator::I32RemU => step!(|a: i32, b: i32| -> i32 {
+                if let Some(c) = (a as u32).checked_rem(b as u32) {
+                    c as i32
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
             Operator::I32And => step!(|a:i32, b:i32| -> i32 a & b),
             Operator::I32Or => step!(|a:i32, b:i32| -> i32 a | b),
             Operator::I32Xor => step!(|a:i32, b:i32| -> i32 a ^ b),
@@ -421,12 +494,49 @@ pub(crate) fn eval<'a>(
             Operator::I64Add => step!(|a:i64, b:i64| -> i64 a.wrapping_add(b)),
             Operator::I64Sub => step!(|a:i64, b:i64| -> i64 a.wrapping_sub(b)),
             Operator::I64Mul => step!(|a:i64, b:i64| -> i64 a.wrapping_mul(b)),
-            Operator::I64DivS => step!(|a:i64, b:i64| -> i64 a / b),
-            Operator::I64DivU => step!(|a:i64, b:i64| -> i64 ((a as u64) / (b as u64)) as i64),
-            Operator::I64RemS => step!(|a: i64, b: i64| -> i64 a % b),
-            Operator::I64RemU => {
-                step!(|a: i64, b: i64| -> i64 { ((a as u64) % (b as u64)) as i64 })
-            }
+            Operator::I64DivS => step!(|a: i64, b: i64| -> i64 {
+                if let Some(c) = a.checked_div(b) {
+                    c
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
+            Operator::I64DivU => step!(|a: i64, b: i64| -> i64 {
+                if let Some(c) = (a as u64).checked_div(b as u64) {
+                    c as i64
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
+            Operator::I64RemS => step!(|a: i64, b: i64| -> i64 {
+                if let Some(c) = a.checked_rem(b) {
+                    c
+                } else if b == 0 {
+                    trap!(TrapKind::DivisionByZero);
+                } else {
+                    assert!(b == -1);
+                    0
+                }
+            }),
+            Operator::I64RemU => step!(|a: i64, b: i64| -> i64 {
+                if let Some(c) = (a as u64).checked_rem(b as u64) {
+                    c as i64
+                } else {
+                    trap!(if b == 0 {
+                        TrapKind::DivisionByZero
+                    } else {
+                        TrapKind::Overflow
+                    });
+                }
+            }),
             Operator::I64And => step!(|a: i64, b: i64| -> i64 a & b),
             Operator::I64Or => step!(|a: i64, b: i64| -> i64 a | b),
             Operator::I64Xor => step!(|a: i64, b: i64| -> i64 a ^ b),
