@@ -364,7 +364,7 @@ pub(crate) fn eval<'a>(
             Operator::I64LeS => step!(|a:i64, b:i64| -> i32 if a <= b { 1 } else { 0 }),
             Operator::I64LeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
             Operator::I64GeS => step!(|a:i64, b:i64| -> i32 if a >= b { 1 } else { 0 }),
-            Operator::I64GeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
+            Operator::I64GeU => step!(|a:i64, b:i64| -> i32 if (a as u64) >= b as u64 { 1 } else { 0 }),
             Operator::F32Eq => step!(|a:f32, b:f32| -> i32 floats::eq_f32(a, b)),
             Operator::F32Ne => step!(|a:f32, b:f32| -> i32 floats::ne_f32(a, b)),
             Operator::F32Lt => step!(|a:f32, b:f32| -> i32 floats::lt_f32(a, b)),
@@ -385,36 +385,42 @@ pub(crate) fn eval<'a>(
             Operator::I32Mul => step!(|a:i32, b:i32| -> i32 a.wrapping_mul(b)),
             Operator::I32DivS => step!(|a:i32, b:i32| -> i32 a / b),
             Operator::I32DivU => step!(|a:i32, b:i32| -> i32 ((a as u32) / (b as u32)) as i32),
-            Operator::I32RemS => unimplemented!("{:?}", operators[i]),
+            Operator::I32RemS => step!(|a: i32, b: i32| -> i32 a % b),
             Operator::I32RemU => {
                 step!(|a: i32, b: i32| -> i32 { ((a as u32) % (b as u32)) as i32 })
             }
             Operator::I32And => step!(|a:i32, b:i32| -> i32 a & b),
             Operator::I32Or => step!(|a:i32, b:i32| -> i32 a | b),
-            Operator::I32Xor
-            | Operator::I32Shl
-            | Operator::I32ShrS
-            | Operator::I32ShrU
-            | Operator::I32Rotl
-            | Operator::I32Rotr => unimplemented!("{:?}", operators[i]),
-            Operator::I64Clz => step!(|a:i64| -> i32 a.leading_zeros() as i32),
-            Operator::I64Ctz => step!(|a:i64| -> i32 a.trailing_zeros() as i32),
-            Operator::I64Popcnt => step!(|a:i64| -> i32 a.count_ones() as i32),
+            Operator::I32Xor => step!(|a:i32, b:i32| -> i32 a ^ b),
+            Operator::I32Shl => step!(|a:i32, b:i32| -> i32 a.wrapping_shl(b as u32)),
+            Operator::I32ShrS => step!(|a:i32, b:i32| -> i32 a.wrapping_shr(b as u32)),
+            Operator::I32ShrU => {
+                step!(|a:i32, b:i32| -> i32 (a as u32).wrapping_shr(b as u32) as i32)
+            }
+            Operator::I32Rotl => step!(|a:i32, b:i32| -> i32 a.rotate_left(b as u32)),
+            Operator::I32Rotr => step!(|a:i32, b:i32| -> i32 a.rotate_right(b as u32)),
+            Operator::I64Clz => step!(|a:i64| -> i64 a.leading_zeros() as i64),
+            Operator::I64Ctz => step!(|a:i64| -> i64 a.trailing_zeros() as i64),
+            Operator::I64Popcnt => step!(|a:i64| -> i64 a.count_ones() as i64),
             Operator::I64Add => step!(|a:i64, b:i64| -> i64 a.wrapping_add(b)),
             Operator::I64Sub => step!(|a:i64, b:i64| -> i64 a.wrapping_sub(b)),
             Operator::I64Mul => step!(|a:i64, b:i64| -> i64 a.wrapping_mul(b)),
             Operator::I64DivS => step!(|a:i64, b:i64| -> i64 a / b),
             Operator::I64DivU => step!(|a:i64, b:i64| -> i64 ((a as u64) / (b as u64)) as i64),
-            Operator::I64RemS
-            | Operator::I64RemU
-            | Operator::I64And
-            | Operator::I64Or
-            | Operator::I64Xor
-            | Operator::I64Shl
-            | Operator::I64ShrS
-            | Operator::I64ShrU
-            | Operator::I64Rotl
-            | Operator::I64Rotr => unimplemented!("{:?}", operators[i]),
+            Operator::I64RemS => step!(|a: i64, b: i64| -> i64 a % b),
+            Operator::I64RemU => {
+                step!(|a: i64, b: i64| -> i64 { ((a as u64) % (b as u64)) as i64 })
+            }
+            Operator::I64And => step!(|a: i64, b: i64| -> i64 a & b),
+            Operator::I64Or => step!(|a: i64, b: i64| -> i64 a | b),
+            Operator::I64Xor => step!(|a: i64, b: i64| -> i64 a ^ b),
+            Operator::I64Shl => step!(|a: i64, b: i64| -> i64 a.wrapping_shl(b as u32)),
+            Operator::I64ShrS => step!(|a: i64, b: i64| -> i64 a.wrapping_shr(b as u32)),
+            Operator::I64ShrU => {
+                step!(|a: i64, b: i64| -> i64 (a as u64).wrapping_shr(b as u32) as i64)
+            }
+            Operator::I64Rotl => step!(|a:i64, b:i64| -> i64 a.rotate_left(b as u32)),
+            Operator::I64Rotr => step!(|a:i64, b:i64| -> i64 a.rotate_right(b as u32)),
             Operator::F32Abs => step!(|a:f32| -> f32 floats::abs_f32(a)),
             Operator::F32Neg => step!(|a:f32| -> f32 floats::neg_f32(a)),
             Operator::F32Ceil => step!(|a:f32| -> f32 floats::ceil_f32(a)),
@@ -449,9 +455,8 @@ pub(crate) fn eval<'a>(
             | Operator::I32TruncSF64
             | Operator::I32TruncUF64 => unimplemented!("{:?}", operators[i]),
             Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
-            Operator::I64ExtendUI32 | Operator::I64TruncSF32 | Operator::I64TruncUF32 => {
-                unimplemented!("{:?}", operators[i])
-            }
+            Operator::I64ExtendUI32 => step!(|a:i32| -> i64 (a as u32 as i64)),
+            Operator::I64TruncSF32 | Operator::I64TruncUF32 => unimplemented!("{:?}", operators[i]),
             Operator::I64TruncSF64 => step!(|a:f64| -> i64 floats::f64_to_i64(a)),
             Operator::I64TruncUF64 => step!(|a:f64| -> i64 floats::f64_to_u64(a)),
             Operator::F32ConvertSI32

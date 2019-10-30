@@ -250,15 +250,16 @@ fn run_spec_tests() {
                 | ("binary.wast", _)
                 | ("linking.wast", _)
                 | ("binary-leb128.wast", _)
-                | ("unwind.wast", _)
-                | ("i32.wast", _)
-                | ("f32.wast", _)
-                | ("i64.wast", _)
-                | ("f64.wast", _)
-                | ("int_exprs.wast", _)
+                | ("i32.wast", 107)
+                | ("i32.wast", 174)
+                | ("f32.wast", 1621)
+                | ("f32.wast", 2020)
+                | ("i64.wast", 107)
+                | ("i64.wast", 174)
+                | ("f64.wast", 1621)
+                | ("f64.wast", 2020)
                 | ("float_exprs.wast", _)
                 | ("float_memory.wast", _)
-                | ("left-to-right.wast", _)
                 | ("conversions.wast", _)
                 | ("endianness.wast", _)
                 // imports
@@ -275,7 +276,9 @@ fn run_spec_tests() {
                 | ("call.wast", 269)
                 | ("call.wast", 270)
                 | ("call_indirect.wast", 549)
-                | ("call_indirect.wast", 553) => true,
+                | ("call_indirect.wast", 550)
+                | ("call_indirect.wast", 553)
+                | ("call_indirect.wast", 554) => true,
                 _ => false,
             },
         );
