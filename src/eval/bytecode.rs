@@ -12,6 +12,11 @@ pub struct BytecodeCache<'a> {
     elses: HashMap<usize, usize>,
 }
 
+pub enum BreakDestination {
+    BlockEnd(usize),
+    LoopStart(usize),
+}
+
 impl<'a> BytecodeCache<'a> {
     pub fn new(reader: OperatorsReader<'a>) -> Self {
         let operators = reader
@@ -69,7 +74,7 @@ impl<'a> BytecodeCache<'a> {
         }
     }
 
-    pub fn break_to(&self, from: usize, depth: u32) -> usize {
+    pub fn break_to(&self, from: usize, depth: u32) -> BreakDestination {
         let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
             Ok(i) => self.ends[i].1,
             Err(i) => self.ends[i - 1].1,
@@ -77,11 +82,11 @@ impl<'a> BytecodeCache<'a> {
         for _ in 0..depth {
             end = self.parents[&end];
         }
-        (if let Some(i) = self.loops.get(&end) {
-            *i
+        if let Some(i) = self.loops.get(&end) {
+            BreakDestination::LoopStart(*i + 1)
         } else {
-            end
-        }) + 1
+            BreakDestination::BlockEnd(end + 1)
+        }
     }
 
     pub fn skip_to_else(&self, from_if: usize) -> usize {

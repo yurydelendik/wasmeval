@@ -269,17 +269,11 @@ fn run_spec_tests() {
                 | ("names.wast", 1095)
                 | ("names.wast", 1107)
                 | ("data.wast", _)
-                // dropped values
-                | ("if.wast", _)
-                | ("labels.wast", _)
-                | ("switch.wast", _)
-                | ("return.wast", _)
-                | ("br.wast", _)
-                | ("br_table.wast", _)
-                | ("br_if.wast", _)
-                // stack heavy
+                // stack "heavy"
                 | ("call.wast", 265)
+                | ("call.wast", 266)
                 | ("call.wast", 269)
+                | ("call.wast", 270)
                 | ("call_indirect.wast", 549)
                 | ("call_indirect.wast", 553) => true,
                 _ => false,

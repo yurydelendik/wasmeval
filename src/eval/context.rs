@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::externals::{Func, Global, Memory, Table};
 use crate::instance::InstanceData;
+use crate::module::ModuleData;
 use crate::values::Val;
 
 pub struct Local(pub Val);
@@ -28,10 +29,23 @@ impl<'a> EvalContext<'a> {
     pub fn get_table(&self, index: u32) -> Ref<Rc<RefCell<dyn Table<'a> + 'a>>> {
         Ref::map(self.instance_data.borrow(), |i| &i.tables[index as usize])
     }
+    pub fn get_type(&self, index: u32) -> ModuleFuncType<'a> {
+        ModuleFuncType(
+            self.instance_data.borrow().module_data.clone(),
+            index as usize,
+        )
+    }
+}
+
+pub(crate) struct ModuleFuncType<'a>(Rc<RefCell<ModuleData<'a>>>, usize);
+
+impl ModuleFuncType<'_> {
+    pub fn ty(&self) -> Ref<wasmparser::FuncType> {
+        Ref::map(self.0.borrow(), |m| &m.types[self.1])
+    }
 }
 
 pub(crate) struct Frame<'a, 'e> {
-    #[allow(dead_code)]
     context: &'a EvalContext<'e>,
     locals: Vec<Local>,
 }
@@ -45,5 +59,8 @@ impl<'a, 'e> Frame<'a, 'e> {
     }
     pub fn get_local_mut(&mut self, index: u32) -> &mut Val {
         &mut self.locals[index as usize].0
+    }
+    pub fn get_type(&self, index: u32) -> ModuleFuncType<'e> {
+        self.context.get_type(index)
     }
 }

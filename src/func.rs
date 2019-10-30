@@ -73,7 +73,7 @@ impl<'a> Func for InstanceFunction<'a> {
         let locals = read_body_locals(params, &body);
         let mut ctx = EvalContext::new(self.instance_data.clone());
         let body = Box::new(InstanceFunctionBody::new(&body));
-        let result = eval(&mut ctx, &*body, locals);
+        let result = eval(&mut ctx, &*body, locals, self.results_arity());
         result
     }
 }

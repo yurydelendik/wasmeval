@@ -1,6 +1,6 @@
 use crate::values::{Trap, Val};
 
-pub(crate) use bytecode::{BytecodeCache, EvalSource, Operator};
+pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 pub(crate) use context::{EvalContext, Frame, Local};
 
 mod bytecode;
@@ -16,17 +16,32 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     it.skip(i).next().expect("valid br_table entry")
 }
 
+fn get_returns_count(context: &Frame, ty: &wasmparser::TypeOrFuncType) -> usize {
+    use wasmparser::{Type, TypeOrFuncType};
+    match ty {
+        TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
+        TypeOrFuncType::Type(_) => 1,
+        TypeOrFuncType::FuncType(index) => {
+            let ty = context.get_type(*index);
+            let len = ty.ty().returns.len();
+            len
+        }
+    }
+}
+
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
     source: &dyn EvalSource,
     locals: Vec<Local>,
+    return_arity: usize,
 ) -> Result<Box<[Val]>, Trap> {
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
     let mut frame = Frame::new(context, locals);
     let mut stack: Vec<Val> = Vec::new();
+    let mut block_returns = vec![(return_arity, 0)];
 
     macro_rules! val_ty {
         (i32) => {
@@ -123,7 +138,23 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! break_to {
         ($depth:expr) => {{
-            i = bytecode.break_to(i, $depth);
+            let target_depth = block_returns.len() - $depth as usize - 1;
+            match bytecode.break_to(i, $depth) {
+                BreakDestination::BlockEnd(end) => {
+                    i = end;
+                    let (tail_len, leave) = block_returns[target_depth];
+                    block_returns.truncate(target_depth);
+                    let tail = stack.split_off(stack.len() - tail_len);
+                    stack.truncate(leave);
+                    stack.extend_from_slice(&tail);
+                }
+                BreakDestination::LoopStart(start) => {
+                    i = start;
+                    let leave = block_returns[target_depth].1;
+                    block_returns.truncate(target_depth + 1);
+                    stack.truncate(leave);
+                }
+            }
             continue;
         }};
     }
@@ -149,8 +180,11 @@ pub(crate) fn eval<'a>(
                 return Err(Trap);
             }
             Operator::Nop => (),
-            Operator::Block { .. } | Operator::Loop { .. } => (),
+            Operator::Block { ty } | Operator::Loop { ty } => {
+                block_returns.push((get_returns_count(&frame, ty), stack.len()));
+            }
             Operator::If { ty } => {
+                block_returns.push((get_returns_count(&frame, ty), stack.len()));
                 let c = pop!(i32);
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
@@ -159,12 +193,14 @@ pub(crate) fn eval<'a>(
             }
             Operator::Else => {
                 i = bytecode.skip_to_end(i);
+                block_returns.pop().unwrap();
                 continue;
             }
             Operator::End => {
                 if i + 1 >= bytecode.len() {
                     break;
                 }
+                block_returns.pop().unwrap();
             }
             Operator::Br { relative_depth } => break_to!(*relative_depth),
             Operator::BrIf { relative_depth } => {
@@ -668,14 +704,16 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
+    if stack.len() != return_arity {
+        stack = stack.split_off(stack.len() - return_arity);
+    }
     Ok(stack.into_boxed_slice())
 }
 
 pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
-    let result = eval(context, source, vec![]);
+    let result = eval(context, source, vec![], 1);
     match result {
         Ok(val) => {
-            debug_assert!(val.len() == 1);
             val[0].clone()
         }
         Err(_) => {
