@@ -21,7 +21,6 @@ fn instantiate_module<'a, 'b>(
     let module = parse_module(module)?;
     let mut imports = Vec::new();
     for (module_name, field) in module.imports().into_iter() {
-        let module_name = format!("${}", module_name);
         let (instance, m) = context.find_instance(Some(module_name));
         let (i, _) = m
             .exports()
@@ -132,7 +131,7 @@ impl<'a> Context<'a> {
     pub fn new() -> Self {
         let instances = vec![create_spectest()];
         let aliases: HashMap<String, usize> =
-            [("$spectest".to_owned(), 0)].iter().cloned().collect();
+            [("spectest".to_owned(), 0)].iter().cloned().collect();
         Context {
             instances,
             aliases,
@@ -253,7 +252,6 @@ where
                 // }
             }
             CommandKind::Register { name, as_name } => {
-                let as_name = format!("${}", as_name);
                 context.add_alias(name, as_name);
             }
             CommandKind::PerformAction(action) => {
