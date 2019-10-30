@@ -311,8 +311,7 @@ fn run_spec_tests() {
             wabt_features,
             //|_, _| false,
             |name, line| match (name, line) {
-                ("start.wast", _)
-                | ("memory_trap.wast", _)
+                ("memory_trap.wast", _)
                 | ("address.wast", _)
                 | ("binary.wast", _)
                 | ("linking.wast", _)
@@ -332,6 +331,10 @@ fn run_spec_tests() {
                 | ("conversions.wast", _)
                 | ("endianness.wast", _)
                 | ("names.wast", 1107)
+                // spectest stubs
+                | ("start.wast", 80)
+                | ("start.wast", 86)
+                | ("start.wast", 92)
                 // stack "heavy"
                 | ("call.wast", 265)
                 | ("call.wast", 266)

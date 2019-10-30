@@ -19,6 +19,7 @@ pub(crate) struct ModuleData<'a> {
     pub globals: Box<[Global<'a>]>,
     pub func_types: Box<[u32]>,
     pub func_bodies: Box<[FunctionBody<'a>]>,
+    pub start_func: Option<u32>,
 }
 
 pub struct Module<'a> {
@@ -40,6 +41,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     let mut globals = None;
     let mut func_types = None;
     let mut func_bodies = None;
+    let mut start_func = None;
     while !reader.eof() {
         let section = reader.read()?;
         match section.code {
@@ -123,7 +125,9 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
-
+            SectionCode::Start => {
+                start_func = Some(section.get_start_section_content()?);
+            }
             _ => (),
         }
     }
@@ -149,6 +153,7 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
         globals,
         func_types,
         func_bodies,
+        start_func,
     })
 }
 

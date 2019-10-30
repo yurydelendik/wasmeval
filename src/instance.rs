@@ -159,6 +159,12 @@ impl<'a> Instance<'a> {
             });
         }
 
+        if let Some(start_func) = module_data.borrow().start_func {
+            let f = data.borrow().funcs[start_func as usize].clone();
+            debug_assert!(f.borrow().params_arity() == 0 && f.borrow().results_arity() == 0);
+            f.borrow().call(&[]).unwrap();
+        }
+
         Ok(Instance { data, exports })
     }
 
