@@ -164,7 +164,12 @@ impl<'a> Module<'a> {
     }
 
     pub fn imports(&self) -> Vec<(String, String)> {
-        vec![]
+        self.data
+            .borrow()
+            .imports
+            .iter()
+            .map(|e| (e.module.to_string(), e.field.to_string()))
+            .collect::<Vec<_>>()
     }
 
     pub fn exports(&self) -> Vec<String> {

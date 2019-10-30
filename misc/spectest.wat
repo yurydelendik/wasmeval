@@ -1,0 +1,30 @@
+(module $spectest
+  (; stub for spectest module ;)
+  (global (export "global_i32") i32 (i32.const 666))
+  (global (export "global_f32") f32 (f32.const 666))
+  (global (export "global_f64") f64 (f64.const 666))
+
+  (table (export "table") 10 20 anyfunc)
+
+  (memory (export "memory") 1 2)
+
+  (func (export "print")
+    (unreachable)
+  )
+  (func (export "print_i32") (param i32)
+    (unreachable)
+  )
+  (func (export "print_i32_f32") (param i32 f32)
+    (unreachable)
+  )
+  (func (export "print_f64_f64") (param f64 f64)
+    (unreachable)
+  )
+  (func (export "print_f32") (param f32)
+    (unreachable)
+  )
+  (func (export "print_f64") (param f64)
+    (unreachable)
+  )
+  
+)

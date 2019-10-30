@@ -15,12 +15,23 @@ fn parse_module<'a>(module: ModuleBinary) -> Result<Module<'a>, Error> {
 }
 
 fn instantiate_module<'a, 'b>(
-    _context: &'b Context<'a>,
+    context: &'b Context<'a>,
     module: ModuleBinary,
 ) -> Result<(Instance<'a>, Module<'a>), Error> {
     let module = parse_module(module)?;
-    // TODO dependencies
-    let instance = Instance::new(&module, &[])?;
+    let mut imports = Vec::new();
+    for (module_name, field) in module.imports().into_iter() {
+        let module_name = format!("${}", module_name);
+        let (instance, m) = context.find_instance(Some(module_name));
+        let (i, _) = m
+            .exports()
+            .into_iter()
+            .enumerate()
+            .find(|(_, e)| *e == field)
+            .unwrap();
+        imports.push(instance.exports()[i].clone());
+    }
+    let instance = Instance::new(&module, &imports)?;
     Ok((instance, module))
 }
 
@@ -113,14 +124,19 @@ fn assert_value(value: &Val, expected: &Value<f32, f64>) -> bool {
 }
 
 struct Context<'a> {
-    pub instances: HashMap<String, (Instance<'a>, Module<'a>)>,
-    pub last_name: String,
+    instances: Vec<(Instance<'a>, Module<'a>)>,
+    aliases: HashMap<String, usize>,
+    last: usize,
 }
 impl<'a> Context<'a> {
     pub fn new() -> Self {
+        let instances = vec![create_spectest()];
+        let aliases: HashMap<String, usize> =
+            [("$spectest".to_owned(), 0)].iter().cloned().collect();
         Context {
-            instances: HashMap::new(),
-            last_name: String::from(""),
+            instances,
+            aliases,
+            last: !0,
         }
     }
     pub fn add_instance(
@@ -129,17 +145,67 @@ impl<'a> Context<'a> {
         module: Module<'a>,
         name: Option<String>,
     ) {
-        let name = name.unwrap_or(String::from(""));
-        self.instances.insert(name.clone(), (instance, module));
-        self.last_name = name;
+        let last = self.instances.len();
+        self.instances.push((instance, module));
+        self.last = last;
+        if let Some(name) = name {
+            self.aliases.insert(name, last);
+        }
     }
     pub fn find_instance<'b>(&'b self, name: Option<String>) -> &'b (Instance<'a>, Module<'a>)
     where
         'a: 'b,
     {
-        let name = name.unwrap_or_else(|| self.last_name.clone());
-        self.instances.get(&name).unwrap()
+        if name.is_none() {
+            return &self.instances[self.last];
+        }
+        let name = name.as_ref().unwrap();
+        if let Some(index) = self.aliases.get(name) {
+            &self.instances[*index]
+        } else {
+            panic!("unable to resolve {} module", name,);
+        }
     }
+    pub fn add_alias(&mut self, name: Option<String>, as_name: String) {
+        self.aliases.insert(
+            as_name,
+            match name {
+                Some(ref name) => {
+                    if let Some(index) = self.aliases.get(name) {
+                        *index
+                    } else {
+                        panic!("unable to resolve {} module", name,);
+                    }
+                }
+                None => self.last,
+            },
+        );
+    }
+}
+
+fn create_spectest<'a>() -> (Instance<'a>, Module<'a>) {
+    let spectest_wasm: Box<[u8]> = Box::new([
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x1a, 0x06, 0x60, 0x00, 0x00, 0x60,
+        0x01, 0x7f, 0x00, 0x60, 0x02, 0x7f, 0x7d, 0x00, 0x60, 0x02, 0x7c, 0x7c, 0x00, 0x60, 0x01,
+        0x7d, 0x00, 0x60, 0x01, 0x7c, 0x00, 0x03, 0x07, 0x06, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+        0x04, 0x05, 0x01, 0x70, 0x01, 0x0a, 0x14, 0x05, 0x04, 0x01, 0x01, 0x01, 0x02, 0x06, 0x1b,
+        0x03, 0x7f, 0x00, 0x41, 0x9a, 0x05, 0x0b, 0x7d, 0x00, 0x43, 0x00, 0x80, 0x26, 0x44, 0x0b,
+        0x7c, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xd0, 0x84, 0x40, 0x0b, 0x07, 0x85, 0x01,
+        0x0b, 0x0a, 0x67, 0x6c, 0x6f, 0x62, 0x61, 0x6c, 0x5f, 0x69, 0x33, 0x32, 0x03, 0x00, 0x0a,
+        0x67, 0x6c, 0x6f, 0x62, 0x61, 0x6c, 0x5f, 0x66, 0x33, 0x32, 0x03, 0x01, 0x0a, 0x67, 0x6c,
+        0x6f, 0x62, 0x61, 0x6c, 0x5f, 0x66, 0x36, 0x34, 0x03, 0x02, 0x05, 0x74, 0x61, 0x62, 0x6c,
+        0x65, 0x01, 0x00, 0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00, 0x05, 0x70, 0x72,
+        0x69, 0x6e, 0x74, 0x00, 0x00, 0x09, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x5f, 0x69, 0x33, 0x32,
+        0x00, 0x01, 0x0d, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x5f, 0x69, 0x33, 0x32, 0x5f, 0x66, 0x33,
+        0x32, 0x00, 0x02, 0x0d, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x5f, 0x66, 0x36, 0x34, 0x5f, 0x66,
+        0x36, 0x34, 0x00, 0x03, 0x09, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x5f, 0x66, 0x33, 0x32, 0x00,
+        0x04, 0x09, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x5f, 0x66, 0x36, 0x34, 0x00, 0x05, 0x0a, 0x19,
+        0x06, 0x03, 0x00, 0x00, 0x0b, 0x03, 0x00, 0x00, 0x0b, 0x03, 0x00, 0x00, 0x0b, 0x03, 0x00,
+        0x00, 0x0b, 0x03, 0x00, 0x00, 0x0b, 0x03, 0x00, 0x00, 0x0b,
+    ]);
+    let module = Module::new(spectest_wasm).expect("spectest module");
+    let instance = Instance::new(&module, &[]).expect("spectest instance");
+    (instance, module)
 }
 
 fn run_wabt_scripts<F>(filename: &str, wast: &[u8], features: Features, skip_test: F)
@@ -186,8 +252,9 @@ where
                 //     );
                 // }
             }
-            CommandKind::Register { .. } => {
-                // TODO register for linking
+            CommandKind::Register { name, as_name } => {
+                let as_name = format!("${}", as_name);
+                context.add_alias(name, as_name);
             }
             CommandKind::PerformAction(action) => {
                 let _result = preform_action(&context, action);
@@ -258,18 +325,13 @@ fn run_spec_tests() {
                 | ("i64.wast", 174)
                 | ("f64.wast", 1621)
                 | ("f64.wast", 2020)
+                | ("imports.wast", 87)
+                | ("imports.wast", 88)
                 | ("float_exprs.wast", _)
                 | ("float_memory.wast", _)
                 | ("conversions.wast", _)
                 | ("endianness.wast", _)
-                // imports
-                | ("imports.wast", _)
-                | ("globals.wast", 301)
-                | ("elem.wast", _)
-                | ("func_ptrs.wast", _)
-                | ("names.wast", 1095)
                 | ("names.wast", 1107)
-                | ("data.wast", _)
                 // stack "heavy"
                 | ("call.wast", 265)
                 | ("call.wast", 266)
