@@ -321,7 +321,8 @@ fn run_spec_tests() {
             wabt_features,
             //|_, _| false,
             |name, line| match (name, line) {
-                ("linking.wast", _)
+                ("linking.wast", 387)
+                | ("linking.wast", 388)
                 // invalid conversion to integer
                 | ("traps.wast", 56)
                 | ("traps.wast", 57)
@@ -337,11 +338,6 @@ fn run_spec_tests() {
                 | ("call_indirect.wast", 480)
                 | ("call_indirect.wast", 487)
                 | ("call_indirect.wast", 494)
-                | ("imports.wast", 283)
-                | ("imports.wast", 286)
-                | ("imports.wast", 302)
-                | ("imports.wast", 305)
-                | ("elem.wast", 353)
                 // stack "heavy"
                 | ("call.wast", 265)
                 | ("call.wast", 266)

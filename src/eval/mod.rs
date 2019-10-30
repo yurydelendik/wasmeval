@@ -272,7 +272,8 @@ pub(crate) fn eval<'a>(
                 let table = context.get_table(*table_index);
                 let ty = context.get_type(*index);
                 let f = match table.borrow().get_func(func_index) {
-                    Ok(f) => f,
+                    Ok(Some(f)) => f,
+                    Ok(None) => trap!(TrapKind::Uninitialized),
                     Err(_) => trap!(TrapKind::OutOfBounds),
                 };
                 // TODO detailed signature check

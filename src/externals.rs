@@ -27,11 +27,11 @@ pub trait Global {
 pub struct TableOutOfBounds;
 
 pub trait Table<'a> {
-    fn get_func(&self, index: u32) -> Result<Rc<RefCell<dyn Func + 'a>>, TableOutOfBounds>;
+    fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func + 'a>>>, TableOutOfBounds>;
     fn set_func(
         &mut self,
         index: u32,
-        f: Rc<RefCell<dyn Func + 'a>>,
+        f: Option<Rc<RefCell<dyn Func + 'a>>>,
     ) -> Result<(), TableOutOfBounds>;
 }
 

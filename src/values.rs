@@ -77,7 +77,8 @@ pub enum TrapKind {
     SignatureMismatch,
     DivisionByZero,
     Overflow,
-    FloatTrancation,
+    FloatTruncation,
+    Uninitialized,
     User(String),
 }
 
