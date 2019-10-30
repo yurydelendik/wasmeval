@@ -311,25 +311,17 @@ fn run_spec_tests() {
             wabt_features,
             //|_, _| false,
             |name, line| match (name, line) {
-                ("memory_trap.wast", _)
-                | ("address.wast", _)
-                | ("binary.wast", _)
-                | ("linking.wast", _)
-                | ("binary-leb128.wast", _)
-                | ("i32.wast", 107)
-                | ("i32.wast", 174)
-                | ("f32.wast", 1621)
+                ("linking.wast", _)
+                | ("i32.wast", 107) // div 0
+                | ("i32.wast", 174) // div 0
+                | ("f32.wast", 1621) // -0.0
                 | ("f32.wast", 2020)
-                | ("i64.wast", 107)
-                | ("i64.wast", 174)
-                | ("f64.wast", 1621)
+                | ("i64.wast", 107) // div 0
+                | ("i64.wast", 174) // div 0
+                | ("f64.wast", 1621)  // -0.0
                 | ("f64.wast", 2020)
-                | ("imports.wast", 87)
-                | ("imports.wast", 88)
                 | ("float_exprs.wast", _)
-                | ("float_memory.wast", _)
                 | ("conversions.wast", _)
-                | ("endianness.wast", _)
                 // stack "heavy"
                 | ("call.wast", 265)
                 | ("call.wast", 266)

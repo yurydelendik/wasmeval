@@ -255,9 +255,33 @@ pub fn i64_to_f64(a: i64) -> u64 {
 }
 
 #[inline]
+pub fn u64_to_f64(a: i64) -> u64 {
+    unsafe {
+        let c = a as u64 as f64;
+        transmute(c)
+    }
+}
+
+#[inline]
 pub fn f32_to_f64(a: u32) -> u64 {
     unsafe {
         let c = transmute::<_, f32>(a) as f64;
+        transmute(c)
+    }
+}
+
+#[inline]
+pub fn u32_to_f32(a: i32) -> u32 {
+    unsafe {
+        let c = a as u32 as f32;
+        transmute(c)
+    }
+}
+
+#[inline]
+pub fn i32_to_f32(a: i32) -> u32 {
+    unsafe {
+        let c = a as f32;
         transmute(c)
     }
 }

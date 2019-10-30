@@ -459,15 +459,15 @@ pub(crate) fn eval<'a>(
             Operator::I64TruncSF32 | Operator::I64TruncUF32 => unimplemented!("{:?}", operators[i]),
             Operator::I64TruncSF64 => step!(|a:f64| -> i64 floats::f64_to_i64(a)),
             Operator::I64TruncUF64 => step!(|a:f64| -> i64 floats::f64_to_u64(a)),
-            Operator::F32ConvertSI32
-            | Operator::F32ConvertUI32
-            | Operator::F32ConvertSI64
-            | Operator::F32ConvertUI64
-            | Operator::F32DemoteF64 => unimplemented!("{:?}", operators[i]),
+            Operator::F32ConvertSI32 => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
+            Operator::F32ConvertUI32 => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
+            Operator::F32ConvertSI64 | Operator::F32ConvertUI64 | Operator::F32DemoteF64 => {
+                unimplemented!("{:?}", operators[i])
+            }
             Operator::F64ConvertSI32 => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
             Operator::F64ConvertUI32 => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
-            Operator::F64ConvertSI64 => unimplemented!("{:?}", operators[i]),
-            Operator::F64ConvertUI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
+            Operator::F64ConvertSI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
+            Operator::F64ConvertUI64 => step!(|a:i64| -> f64 floats::u64_to_f64(a)),
             Operator::F64PromoteF32 => step!(|a:f32| -> f64 floats::f32_to_f64(a)),
             Operator::I32ReinterpretF32 => step!(|a:f32| -> i32 a as i32),
             Operator::I64ReinterpretF64 => step!(|a:f64| -> i64 a as i64),
