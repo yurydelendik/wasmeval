@@ -223,8 +223,12 @@ pub(crate) fn eval<'a>(
             Operator::CallIndirect { index, table_index } => {
                 let func_index = pop!(i32) as u32;
                 let table = context.get_table(*table_index);
-                // TODO check type index and func
+                let ty = context.get_type(*index);
                 let f = table.borrow().get_func(func_index);
+                debug_assert!(
+                    f.borrow().params_arity() == ty.ty().params.len()
+                        && f.borrow().results_arity() == ty.ty().returns.len()
+                );
                 call!(f)
             }
             Operator::Drop => {
@@ -713,9 +717,7 @@ pub(crate) fn eval<'a>(
 pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
     let result = eval(context, source, vec![], 1);
     match result {
-        Ok(val) => {
-            val[0].clone()
-        }
+        Ok(val) => val[0].clone(),
         Err(_) => {
             panic!("trap duing eval_const");
         }
