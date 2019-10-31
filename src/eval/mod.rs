@@ -16,7 +16,7 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     it.skip(i).next().expect("valid br_table entry")
 }
 
-fn get_returns_count(context: &Frame, ty: &wasmparser::TypeOrFuncType) -> usize {
+fn get_returns_count(context: &EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
     use wasmparser::{Type, TypeOrFuncType};
     match ty {
         TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
@@ -228,10 +228,10 @@ pub(crate) fn eval<'a>(
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
-                block_returns.push((get_returns_count(&frame, ty), stack.len()));
+                block_returns.push((get_returns_count(context, ty), stack.len()));
             }
             Operator::If { ty } => {
-                block_returns.push((get_returns_count(&frame, ty), stack.len()));
+                block_returns.push((get_returns_count(context, ty), stack.len()));
                 let c = pop!(i32);
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
@@ -577,18 +577,45 @@ pub(crate) fn eval<'a>(
             Operator::F64Max => step!(|a:f64, b:f64| -> f64 floats::max_f64(a, b)),
             Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 floats::copysign_f64(a, b)),
             Operator::I32WrapI64 => step!(|a:i64| -> i32 a as i32),
-            Operator::I32TruncSF32
-            | Operator::I32TruncUF32
-            | Operator::I32TruncSF64
-            | Operator::I32TruncUF64 => op_notimpl!(),
+            Operator::I32TruncSF32 => step!(|a:f32| -> i32 match floats::f32_trunc_i32(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I32TruncUF32 => step!(|a:f32| -> i32 match floats::f32_trunc_u32(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I32TruncSF64 => step!(|a:f64| -> i32 match floats::f64_trunc_i32(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I32TruncUF64 => step!(|a:f64| -> i32 match floats::f64_trunc_u32(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
             Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
             Operator::I64ExtendUI32 => step!(|a:i32| -> i64 (a as u32 as i64)),
-            Operator::I64TruncSF32 | Operator::I64TruncUF32 => op_notimpl!(),
-            Operator::I64TruncSF64 => step!(|a:f64| -> i64 floats::f64_to_i64(a)),
-            Operator::I64TruncUF64 => step!(|a:f64| -> i64 floats::f64_to_u64(a)),
+            Operator::I64TruncSF32 => step!(|a:f32| -> i64 match floats::f32_trunc_i64(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I64TruncUF32 => step!(|a:f32| -> i64 match floats::f32_trunc_u64(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I64TruncSF64 => step!(|a:f64| -> i64 match floats::f64_trunc_i64(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
+            Operator::I64TruncUF64 => step!(|a:f64| -> i64 match floats::f64_trunc_u64(a) {
+                Some(c) => c,
+                None => trap!(TrapKind::Overflow),
+            }),
             Operator::F32ConvertSI32 => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
             Operator::F32ConvertUI32 => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
-            Operator::F32ConvertSI64 | Operator::F32ConvertUI64 | Operator::F32DemoteF64 => op_notimpl!(),
+            Operator::F32ConvertSI64 => step!(|a:i64| -> f32 floats::i64_to_f32(a)),
+            Operator::F32ConvertUI64 => step!(|a:i64| -> f32 floats::u64_to_f32(a)),
+            Operator::F32DemoteF64 => step!(|a:f64| -> f32 floats::f64_to_f32(a)),
             Operator::F64ConvertSI32 => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
             Operator::F64ConvertUI32 => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
             Operator::F64ConvertSI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),

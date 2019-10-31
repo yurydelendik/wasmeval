@@ -321,16 +321,18 @@ fn run_spec_tests() {
             |name, line| match (name, line) {
                 ("linking.wast", 387)
                 | ("linking.wast", 388)
-                // invalid conversion to integer
-                | ("traps.wast", 56)
-                | ("traps.wast", 57)
                 // -0.0
                 | ("f32.wast", 1621)
                 | ("f64.wast", 1621)
                 | ("f32.wast", 2020)
                 | ("f64.wast", 2020)
-                | ("float_exprs.wast", _)
-                | ("conversions.wast", _)
+                // integer overflow
+                | ("conversions.wast", 70)
+                | ("conversions.wast", 92)
+                | ("conversions.wast", 166)
+                | ("conversions.wast", 186)
+                | ("conversions.wast", 211)
+                | ("conversions.wast", 235)
                 // type mismatch
                 | ("call_indirect.wast", 470)
                 | ("call_indirect.wast", 480)

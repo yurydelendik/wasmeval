@@ -46,6 +46,7 @@ impl ModuleFuncType<'_> {
 }
 
 pub(crate) struct Frame<'a, 'e> {
+    #[allow(dead_code)]
     context: &'a EvalContext<'e>,
     locals: Vec<Local>,
 }
@@ -59,8 +60,5 @@ impl<'a, 'e> Frame<'a, 'e> {
     }
     pub fn get_local_mut(&mut self, index: u32) -> &mut Val {
         &mut self.locals[index as usize].0
-    }
-    pub fn get_type(&self, index: u32) -> ModuleFuncType<'e> {
-        self.context.get_type(index)
     }
 }

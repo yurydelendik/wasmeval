@@ -271,6 +271,14 @@ pub fn f32_to_f64(a: u32) -> u64 {
 }
 
 #[inline]
+pub fn f64_to_f32(a: u64) -> u32 {
+    unsafe {
+        let c = transmute::<_, f64>(a) as f32;
+        transmute(c)
+    }
+}
+
+#[inline]
 pub fn u32_to_f32(a: i32) -> u32 {
     unsafe {
         let c = a as u32 as f32;
@@ -280,6 +288,22 @@ pub fn u32_to_f32(a: i32) -> u32 {
 
 #[inline]
 pub fn i32_to_f32(a: i32) -> u32 {
+    unsafe {
+        let c = a as f32;
+        transmute(c)
+    }
+}
+
+#[inline]
+pub fn u64_to_f32(a: i64) -> u32 {
+    unsafe {
+        let c = a as u64 as f32;
+        transmute(c)
+    }
+}
+
+#[inline]
+pub fn i64_to_f32(a: i64) -> u32 {
     unsafe {
         let c = a as f32;
         transmute(c)
@@ -303,13 +327,99 @@ pub fn i32_to_f64(a: i32) -> u64 {
 }
 
 #[inline]
-pub fn f64_to_i64(a: u64) -> i64 {
-    unsafe { transmute::<_, f64>(a) as i64 }
+pub fn f32_trunc_i32(a: u32) -> Option<i32> {
+    unsafe {
+        let a = transmute::<_, f32>(a).trunc();
+        if (std::i32::MIN as f32) <= a && a <= (std::i32::MAX as f32) {
+            Some(a as i32)
+        } else {
+            None
+        }
+    }
 }
 
 #[inline]
-pub fn f64_to_u64(a: u64) -> i64 {
-    unsafe { transmute::<_, f64>(a) as u64 as i64 }
+pub fn f32_trunc_u32(a: u32) -> Option<i32> {
+    unsafe {
+        let a = transmute::<_, f32>(a).trunc();
+        if (std::u32::MIN as f32) <= a && a <= (std::u32::MAX as f32) {
+            Some(a as u32 as i32)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f64_trunc_i32(a: u64) -> Option<i32> {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if (std::i32::MIN as f64) <= a && a <= (std::i32::MAX as f64) {
+            Some(a as i32)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f64_trunc_u32(a: u64) -> Option<i32> {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if (std::u32::MIN as f64) <= a && a <= (std::u32::MAX as f64) {
+            Some(a as u32 as i32)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f32_trunc_i64(a: u32) -> Option<i64> {
+    unsafe {
+        let a = transmute::<_, f32>(a).trunc();
+        if (std::i64::MIN as f32) <= a && a <= (std::i64::MAX as f32) {
+            Some(a as i64)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f32_trunc_u64(a: u32) -> Option<i64> {
+    unsafe {
+        let a = transmute::<_, f32>(a).trunc();
+        if (std::u64::MIN as f32) <= a && a <= (std::u64::MAX as f32) {
+            Some(a as u64 as i64)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f64_trunc_i64(a: u64) -> Option<i64> {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if (std::i64::MIN as f64) <= a && a <= (std::i64::MAX as f64) {
+            Some(a as i64)
+        } else {
+            None
+        }
+    }
+}
+
+#[inline]
+pub fn f64_trunc_u64(a: u64) -> Option<i64> {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if (std::u64::MIN as f64) <= a && a <= (std::u64::MAX as f64) {
+            Some(a as u64 as i64)
+        } else {
+            None
+        }
+    }
 }
 
 #[inline]
