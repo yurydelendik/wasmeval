@@ -332,13 +332,6 @@ fn run_spec_tests() {
                 | ("f64.wast", 1621)
                 | ("f32.wast", 2020)
                 | ("f64.wast", 2020)
-                // integer overflow
-                | ("conversions.wast", 70)
-                | ("conversions.wast", 92)
-                | ("conversions.wast", 166)
-                | ("conversions.wast", 186)
-                | ("conversions.wast", 211)
-                | ("conversions.wast", 235)
                 // type mismatch
                 | ("call_indirect.wast", 470)
                 | ("call_indirect.wast", 480)

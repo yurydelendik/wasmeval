@@ -335,7 +335,9 @@ pub fn f32_trunc_i32(a: u32) -> Result<i32, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::i32::MIN as f32) <= a && a <= (std::i32::MAX as f32) {
+        const MIN: f32 = -2147483648.0;
+        const MAX: f32 = 2147483520.0;
+        if MIN <= a && a <= MAX {
             Ok(a as i32)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -350,7 +352,9 @@ pub fn f32_trunc_u32(a: u32) -> Result<i32, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::u32::MIN as f32) <= a && a <= (std::u32::MAX as f32) {
+        const MIN: f32 = 0.0;
+        const MAX: f32 = 4294967040.0;
+        if MIN <= a && a <= MAX {
             Ok(a as u32 as i32)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -365,7 +369,9 @@ pub fn f64_trunc_i32(a: u64) -> Result<i32, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::i32::MIN as f64) <= a && a <= (std::i32::MAX as f64) {
+        const MIN: f64 = -2147483648.0;
+        const MAX: f64 = 2147483647.0;
+        if MIN <= a && a <= MAX {
             Ok(a as i32)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -380,7 +386,9 @@ pub fn f64_trunc_u32(a: u64) -> Result<i32, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::u32::MIN as f64) <= a && a <= (std::u32::MAX as f64) {
+        const MIN: f64 = 0.0;
+        const MAX: f64 = 4294967295.0;
+        if MIN <= a && a <= MAX {
             Ok(a as u32 as i32)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -395,7 +403,9 @@ pub fn f32_trunc_i64(a: u32) -> Result<i64, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::i64::MIN as f32) <= a && a <= (std::i64::MAX as f32) {
+        const MIN: f32 = -9223372036854775808.0;
+        const MAX: f32 = 9223371487098961920.0;
+        if MIN <= a && a <= MAX {
             Ok(a as i64)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -410,7 +420,9 @@ pub fn f32_trunc_u64(a: u32) -> Result<i64, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::u64::MIN as f32) <= a && a <= (std::u64::MAX as f32) {
+        const MIN: f32 = 0.0;
+        const MAX: f32 = 18446742974197923840.0;
+        if MIN <= a && a <= MAX {
             Ok(a as u64 as i64)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -425,7 +437,9 @@ pub fn f64_trunc_i64(a: u64) -> Result<i64, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::i64::MIN as f64) <= a && a <= (std::i64::MAX as f64) {
+        const MIN: f64 = -9223372036854775808.0;
+        const MAX: f64 = 9223372036854774784.0;
+        if MIN <= a && a <= MAX {
             Ok(a as i64)
         } else {
             Err(TrapKind::IntegerOverflow)
@@ -440,7 +454,9 @@ pub fn f64_trunc_u64(a: u64) -> Result<i64, TrapKind> {
         if a.is_nan() {
             return Err(TrapKind::InvalidIntegerConversion);
         }
-        if (std::u64::MIN as f64) <= a && a <= (std::u64::MAX as f64) {
+        const MIN: f64 = 0.0;
+        const MAX: f64 = 18446744073709550000.0;
+        if MIN <= a && a <= MAX {
             Ok(a as u64 as i64)
         } else {
             Err(TrapKind::IntegerOverflow)
