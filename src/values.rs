@@ -70,15 +70,16 @@ impl From<wasmparser::Type> for ValType {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum TrapKind {
     Unreachable,
     OutOfBounds,
     SignatureMismatch,
     DivisionByZero,
     Overflow,
-    FloatTruncation,
+    InvalidIntegerConversion,
+    IntegerOverflow,
     Uninitialized,
+    UndefinedElement,
     User(String),
 }
 
@@ -91,6 +92,23 @@ pub struct Trap {
 impl Trap {
     pub fn new(kind: TrapKind, position: usize) -> Self {
         Trap { kind, position }
+    }
+}
+
+impl ToString for Trap {
+    fn to_string(&self) -> String {
+        match self.kind {
+            TrapKind::Unreachable => "unreachable".to_string(),
+            TrapKind::OutOfBounds => "out of bounds memory access".to_string(),
+            TrapKind::SignatureMismatch => "indirect call type mismatch".to_string(),
+            TrapKind::DivisionByZero => "integer divide by zero".to_string(),
+            TrapKind::Overflow => "integer overflow".to_string(),
+            TrapKind::InvalidIntegerConversion => "invalid conversion to integer".to_string(),
+            TrapKind::IntegerOverflow => "integer overflow".to_string(),
+            TrapKind::Uninitialized => "uninitialized element".to_string(),
+            TrapKind::UndefinedElement => "undefined element".to_string(),
+            TrapKind::User(ref msg) => format!("user trap: {}", msg),
+        }
     }
 }
 

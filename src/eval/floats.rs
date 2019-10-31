@@ -1,5 +1,7 @@
 use std::mem::transmute;
 
+use crate::values::TrapKind;
+
 #[inline]
 pub fn abs_f32(a: u32) -> u32 {
     unsafe {
@@ -327,97 +329,121 @@ pub fn i32_to_f64(a: i32) -> u64 {
 }
 
 #[inline]
-pub fn f32_trunc_i32(a: u32) -> Option<i32> {
+pub fn f32_trunc_i32(a: u32) -> Result<i32, TrapKind> {
     unsafe {
         let a = transmute::<_, f32>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::i32::MIN as f32) <= a && a <= (std::i32::MAX as f32) {
-            Some(a as i32)
+            Ok(a as i32)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f32_trunc_u32(a: u32) -> Option<i32> {
+pub fn f32_trunc_u32(a: u32) -> Result<i32, TrapKind> {
     unsafe {
         let a = transmute::<_, f32>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::u32::MIN as f32) <= a && a <= (std::u32::MAX as f32) {
-            Some(a as u32 as i32)
+            Ok(a as u32 as i32)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f64_trunc_i32(a: u64) -> Option<i32> {
+pub fn f64_trunc_i32(a: u64) -> Result<i32, TrapKind> {
     unsafe {
         let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::i32::MIN as f64) <= a && a <= (std::i32::MAX as f64) {
-            Some(a as i32)
+            Ok(a as i32)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f64_trunc_u32(a: u64) -> Option<i32> {
+pub fn f64_trunc_u32(a: u64) -> Result<i32, TrapKind> {
     unsafe {
         let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::u32::MIN as f64) <= a && a <= (std::u32::MAX as f64) {
-            Some(a as u32 as i32)
+            Ok(a as u32 as i32)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f32_trunc_i64(a: u32) -> Option<i64> {
+pub fn f32_trunc_i64(a: u32) -> Result<i64, TrapKind> {
     unsafe {
         let a = transmute::<_, f32>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::i64::MIN as f32) <= a && a <= (std::i64::MAX as f32) {
-            Some(a as i64)
+            Ok(a as i64)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f32_trunc_u64(a: u32) -> Option<i64> {
+pub fn f32_trunc_u64(a: u32) -> Result<i64, TrapKind> {
     unsafe {
         let a = transmute::<_, f32>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::u64::MIN as f32) <= a && a <= (std::u64::MAX as f32) {
-            Some(a as u64 as i64)
+            Ok(a as u64 as i64)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f64_trunc_i64(a: u64) -> Option<i64> {
+pub fn f64_trunc_i64(a: u64) -> Result<i64, TrapKind> {
     unsafe {
         let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::i64::MIN as f64) <= a && a <= (std::i64::MAX as f64) {
-            Some(a as i64)
+            Ok(a as i64)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }
 
 #[inline]
-pub fn f64_trunc_u64(a: u64) -> Option<i64> {
+pub fn f64_trunc_u64(a: u64) -> Result<i64, TrapKind> {
     unsafe {
         let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return Err(TrapKind::InvalidIntegerConversion);
+        }
         if (std::u64::MIN as f64) <= a && a <= (std::u64::MAX as f64) {
-            Some(a as u64 as i64)
+            Ok(a as u64 as i64)
         } else {
-            None
+            Err(TrapKind::IntegerOverflow)
         }
     }
 }

@@ -288,8 +288,14 @@ where
                 if let Ok(_) = result {
                     panic!("{}:{}: trap is expected: {}", filename, line, message);
                 }
-                let _err = result.err().unwrap();
-                // TODO check message
+                let trap = result.err().unwrap();
+                let trap_message = trap.to_string();
+                if !trap_message.contains(message.as_str()) {
+                    panic!(
+                        "{}:{}: trap message {} ~= {}",
+                        filename, line, message, trap_message
+                    );
+                }
             }
             CommandKind::AssertExhaustion { .. }
             | CommandKind::AssertReturnCanonicalNan { .. }

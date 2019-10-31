@@ -274,7 +274,7 @@ pub(crate) fn eval<'a>(
                 let f = match table.borrow().get_func(func_index) {
                     Ok(Some(f)) => f,
                     Ok(None) => trap!(TrapKind::Uninitialized),
-                    Err(_) => trap!(TrapKind::OutOfBounds),
+                    Err(_) => trap!(TrapKind::UndefinedElement),
                 };
                 // TODO detailed signature check
                 if f.borrow().params_arity() != ty.ty().params.len()
@@ -578,38 +578,38 @@ pub(crate) fn eval<'a>(
             Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 floats::copysign_f64(a, b)),
             Operator::I32WrapI64 => step!(|a:i64| -> i32 a as i32),
             Operator::I32TruncSF32 => step!(|a:f32| -> i32 match floats::f32_trunc_i32(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I32TruncUF32 => step!(|a:f32| -> i32 match floats::f32_trunc_u32(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I32TruncSF64 => step!(|a:f64| -> i32 match floats::f64_trunc_i32(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I32TruncUF64 => step!(|a:f64| -> i32 match floats::f64_trunc_u32(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
             Operator::I64ExtendUI32 => step!(|a:i32| -> i64 (a as u32 as i64)),
             Operator::I64TruncSF32 => step!(|a:f32| -> i64 match floats::f32_trunc_i64(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I64TruncUF32 => step!(|a:f32| -> i64 match floats::f32_trunc_u64(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I64TruncSF64 => step!(|a:f64| -> i64 match floats::f64_trunc_i64(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::I64TruncUF64 => step!(|a:f64| -> i64 match floats::f64_trunc_u64(a) {
-                Some(c) => c,
-                None => trap!(TrapKind::Overflow),
+                Ok(c) => c,
+                Err(kind) => trap!(kind),
             }),
             Operator::F32ConvertSI32 => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
             Operator::F32ConvertUI32 => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
