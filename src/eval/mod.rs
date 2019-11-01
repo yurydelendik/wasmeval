@@ -16,13 +16,13 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     it.skip(i).next().expect("valid br_table entry")
 }
 
-fn get_returns_count(context: &EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
+fn get_returns_count(frame: &Frame, ty: &wasmparser::TypeOrFuncType) -> usize {
     use wasmparser::{Type, TypeOrFuncType};
     match ty {
         TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
         TypeOrFuncType::Type(_) => 1,
         TypeOrFuncType::FuncType(index) => {
-            let ty = context.get_type(*index);
+            let ty = frame.context().get_type(*index);
             let len = ty.ty().returns.len();
             len
         }
@@ -31,16 +31,14 @@ fn get_returns_count(context: &EvalContext, ty: &wasmparser::TypeOrFuncType) -> 
 
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
-    context: &'a mut EvalContext,
+    frame: &'a mut Frame,
     source: &dyn EvalSource,
-    locals: Vec<Local>,
     returns: &mut [Val],
 ) -> Result<(), Trap> {
     let return_arity = returns.len();
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
-    let mut frame = Frame::new(context, locals);
     let mut stack: Vec<Val> = Vec::with_capacity(100);
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     block_returns.push((return_arity, 0));
@@ -116,7 +114,7 @@ pub(crate) fn eval<'a>(
     macro_rules! load {
         ($memarg:expr; $ty:ident) => {{
             let offset = pop!(i32) as u32;
-            let ptr = context
+            let ptr = frame.context()
                 .get_memory()
                 .borrow_mut()
                 .content_ptr($memarg, offset, val_size!($ty));
@@ -128,7 +126,7 @@ pub(crate) fn eval<'a>(
         }};
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let offset = pop!(i32) as u32;
-            let ptr = context
+            let ptr = frame.context()
                 .get_memory()
                 .borrow_mut()
                 .content_ptr($memarg, offset, std::mem::size_of::<$tt>() as u32);
@@ -143,11 +141,11 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident) => {{
             let val = pop!($ty);
             let offset = pop!(i32) as u32;
-            let ptr =
-                context
-                    .get_memory()
-                    .borrow_mut()
-                    .content_ptr_mut($memarg, offset, val_size!($ty));
+            let ptr = frame.context().get_memory().borrow_mut().content_ptr_mut(
+                $memarg,
+                offset,
+                val_size!($ty),
+            );
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
             }
@@ -158,7 +156,7 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let val = pop!($ty) as $tt;
             let offset = pop!(i32) as u32;
-            let ptr = context.get_memory().borrow_mut().content_ptr_mut(
+            let ptr = frame.context().get_memory().borrow_mut().content_ptr_mut(
                 $memarg,
                 offset,
                 std::mem::size_of::<$tt>() as u32,
@@ -227,10 +225,10 @@ pub(crate) fn eval<'a>(
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
-                block_returns.push((get_returns_count(context, ty), stack.len()));
+                block_returns.push((get_returns_count(frame, ty), stack.len()));
             }
             Operator::If { ty } => {
-                block_returns.push((get_returns_count(context, ty), stack.len()));
+                block_returns.push((get_returns_count(frame, ty), stack.len()));
                 let c = pop!(i32);
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
@@ -263,13 +261,13 @@ pub(crate) fn eval<'a>(
                 break;
             }
             Operator::Call { function_index } => {
-                let f = context.get_function(*function_index);
+                let f = frame.context().get_function(*function_index);
                 call!(f)
             }
             Operator::CallIndirect { index, table_index } => {
                 let func_index = pop!(i32) as u32;
-                let table = context.get_table(*table_index);
-                let ty = context.get_type(*index);
+                let table = frame.context().get_table(*table_index);
+                let ty = frame.context().get_type(*index);
                 let f = match table.borrow().get_func(func_index) {
                     Ok(Some(f)) => f,
                     Ok(None) => trap!(TrapKind::Uninitialized),
@@ -302,11 +300,11 @@ pub(crate) fn eval<'a>(
                 *frame.get_local_mut(*local_index) = stack.last().unwrap().clone();
             }
             Operator::GetGlobal { global_index } => {
-                let g = context.get_global(*global_index);
+                let g = frame.context().get_global(*global_index);
                 stack.push(g.borrow().content().clone());
             }
             Operator::SetGlobal { global_index } => {
-                let g = context.get_global(*global_index);
+                let g = frame.context().get_global(*global_index);
                 *g.borrow_mut().content_mut() = stack.pop().unwrap();
             }
             Operator::I32Load { memarg } => {
@@ -381,14 +379,14 @@ pub(crate) fn eval<'a>(
             Operator::MemorySize {
                 reserved: memory_index,
             } => {
-                let current = context.get_memory().borrow().current();
+                let current = frame.context().get_memory().borrow().current();
                 push!(current as i32; i32)
             }
             Operator::MemoryGrow {
                 reserved: memory_index,
             } => {
                 let delta = pop!(i32) as u32;
-                let current = context.get_memory().borrow_mut().grow(delta);
+                let current = frame.context().get_memory().borrow_mut().grow(delta);
                 push!(current as i32; i32)
             }
             Operator::I32Const { value } => push!(*value; i32),
@@ -868,7 +866,8 @@ pub(crate) fn eval<'a>(
 
 pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
     let mut vals = vec![Default::default()];
-    let result = eval(context, source, vec![], &mut vals);
+    let mut frame = Frame::new(context, vec![]);
+    let result = eval(&mut frame, source, &mut vals);
     match result {
         Ok(()) => vals.into_iter().next().unwrap(),
         Err(_) => {

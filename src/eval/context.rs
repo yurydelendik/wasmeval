@@ -46,7 +46,6 @@ impl ModuleFuncType {
 }
 
 pub(crate) struct Frame<'a> {
-    #[allow(dead_code)]
     context: &'a EvalContext,
     locals: Vec<Local>,
 }
@@ -60,5 +59,8 @@ impl<'a> Frame<'a> {
     }
     pub fn get_local_mut(&mut self, index: u32) -> &mut Val {
         &mut self.locals[index as usize].0
+    }
+    pub fn context(&self) -> &EvalContext {
+        &self.context
     }
 }

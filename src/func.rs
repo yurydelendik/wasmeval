@@ -2,7 +2,7 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use crate::eval::BytecodeCache;
-use crate::eval::{eval, EvalContext, EvalSource, Local};
+use crate::eval::{eval, EvalContext, EvalSource, Frame, Local};
 use crate::externals::Func;
 use crate::instance::InstanceData;
 use crate::module::ModuleData;
@@ -12,14 +12,17 @@ pub(crate) struct InstanceFunction {
     instance_data: Rc<RefCell<InstanceData>>,
     defined_index: usize,
     cache: RefCell<Option<InstanceFunctionBody>>,
+    context: EvalContext,
 }
 
 impl InstanceFunction {
     pub(crate) fn new(data: Rc<RefCell<InstanceData>>, defined_index: usize) -> InstanceFunction {
+        let context = EvalContext::new(data.clone());
         InstanceFunction {
             instance_data: data,
             defined_index,
             cache: RefCell::new(None),
+            context,
         }
     }
 }
@@ -33,13 +36,17 @@ impl InstanceFunctionBody {
     pub fn new(
         module_data: Rc<RefCell<ModuleData>>,
         body: &wasmparser::FunctionBody<'static>,
+        params_arity: usize,
     ) -> Self {
         let mut locals = Vec::new();
+        let mut total_count = params_arity;
         for local in body.get_locals_reader().expect("reader").into_iter() {
             let (count, ty) = local.expect("local def");
             let local_val = get_default_value(ty.into());
             locals.push((count, local_val));
+            total_count += count as usize;
         }
+        let _ = total_count;
 
         let reader = body.get_operators_reader().expect("operators reader");
         let bytecode = BytecodeCache::new(module_data, reader);
@@ -47,7 +54,7 @@ impl InstanceFunctionBody {
         InstanceFunctionBody { bytecode, locals }
     }
 
-    pub fn create_locals(&self, params: &[Val]) -> Vec<Local> {
+    pub fn create_frame<'a>(&self, ctx: &'a EvalContext, params: &[Val]) -> Frame<'a> {
         let mut locals = Vec::new();
         for param in params {
             locals.push(Local(param.clone()));
@@ -57,7 +64,7 @@ impl InstanceFunctionBody {
                 locals.push(Local(val.clone()));
             }
         }
-        locals
+        Frame::new(&ctx, locals)
     }
 }
 
@@ -96,12 +103,11 @@ impl Func for InstanceFunction {
                 &data.func_bodies[self.defined_index]
             });
             let module_data = self.instance_data.borrow().module_data.clone();
-            let body = InstanceFunctionBody::new(module_data, &body);
+            let body = InstanceFunctionBody::new(module_data, &body, self.params_arity());
             *self.cache.borrow_mut() = Some(body);
         }
         let body = self.cache.borrow();
-        let locals = body.as_ref().unwrap().create_locals(params);
-        let mut ctx = EvalContext::new(self.instance_data.clone());
-        eval(&mut ctx, body.as_ref().unwrap(), locals, results)
+        let mut frame = body.as_ref().unwrap().create_frame(&self.context, params);
+        eval(&mut frame, body.as_ref().unwrap(), results)
     }
 }
