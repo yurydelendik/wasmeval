@@ -179,7 +179,7 @@ pub(crate) fn eval<'a>(
                     block_returns.truncate(target_depth);
                     let tail = stack.split_off(stack.len() - tail_len);
                     stack.truncate(leave);
-                    stack.extend_from_slice(&tail);
+                    stack.extend(tail);
                 }
                 BreakDestination::LoopStart(start) => {
                     i = start;
