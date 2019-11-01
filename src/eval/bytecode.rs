@@ -14,6 +14,7 @@ pub(crate) struct BytecodeCache {
     ends: Vec<(usize, usize)>,
     loops: HashMap<usize, usize>,
     elses: HashMap<usize, usize>,
+    max_control_depth: usize,
 }
 
 pub enum BreakDestination {
@@ -31,6 +32,7 @@ impl BytecodeCache {
         let mut ends = Vec::new();
         let mut loops = HashMap::new();
         let mut elses = HashMap::new();
+        let mut max_control_depth = 0;
 
         let mut control = Vec::new();
         for i in (0..operators.len()).rev() {
@@ -41,6 +43,7 @@ impl BytecodeCache {
                         ends.push((i, last));
                     }
                     control.push((i, None));
+                    max_control_depth = max_control_depth.max(control.len());
                 }
                 Operator::Loop { .. } => {
                     let (end, _) = control.pop().unwrap();
@@ -76,6 +79,7 @@ impl BytecodeCache {
             ends,
             loops,
             elses,
+            max_control_depth,
         }
     }
 
@@ -122,6 +126,10 @@ impl BytecodeCache {
     pub fn position(&self, i: usize) -> usize {
         // TODO real bytecode position
         i
+    }
+
+    pub fn max_control_depth(&self) -> usize {
+        self.max_control_depth
     }
 }
 

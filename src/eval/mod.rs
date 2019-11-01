@@ -41,7 +41,8 @@ pub(crate) fn eval<'a>(
     let mut i = 0;
     let mut frame = Frame::new(context, locals);
     let mut stack: Vec<Val> = Vec::new();
-    let mut block_returns = vec![(return_arity, 0)];
+    let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
+    block_returns.push((return_arity, 0));
 
     macro_rules! val_ty {
         (i32) => {
