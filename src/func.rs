@@ -38,6 +38,8 @@ impl InstanceFunctionBody {
         module_data: Rc<RefCell<ModuleData>>,
         body: &wasmparser::FunctionBody<'static>,
         params_arity: usize,
+        results_arity: usize,
+        ctx: &EvalContext,
     ) -> Self {
         let mut locals = Vec::new();
         let mut frame_size = params_arity;
@@ -49,7 +51,7 @@ impl InstanceFunctionBody {
         }
 
         let reader = body.get_operators_reader().expect("operators reader");
-        let bytecode = BytecodeCache::new(module_data, reader);
+        let bytecode = BytecodeCache::new(module_data, reader, ctx, results_arity);
 
         InstanceFunctionBody {
             bytecode,
@@ -107,7 +109,13 @@ impl Func for InstanceFunction {
                 &data.func_bodies[self.defined_index]
             });
             let module_data = self.instance_data.borrow().module_data.clone();
-            let body = InstanceFunctionBody::new(module_data, &body, self.params_arity());
+            let body = InstanceFunctionBody::new(
+                module_data,
+                &body,
+                self.params_arity(),
+                self.results_arity(),
+                &self.context,
+            );
             *self.cache.borrow_mut() = Some(body);
         }
         let body = self.cache.borrow();

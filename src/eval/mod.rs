@@ -16,19 +16,6 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     it.skip(i).next().expect("valid br_table entry")
 }
 
-fn get_returns_count(frame: &Frame, ty: &wasmparser::TypeOrFuncType) -> usize {
-    use wasmparser::{Type, TypeOrFuncType};
-    match ty {
-        TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
-        TypeOrFuncType::Type(_) => 1,
-        TypeOrFuncType::FuncType(index) => {
-            let ty = frame.context().get_type(*index);
-            let len = ty.ty().returns.len();
-            len
-        }
-    }
-}
-
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
     frame: &'a mut Frame,
@@ -41,7 +28,7 @@ pub(crate) fn eval<'a>(
     let mut i = 0;
     let mut stack: Vec<Val> = Vec::with_capacity(100);
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
-    block_returns.push((return_arity, 0));
+    block_returns.push(0);
 
     macro_rules! val_ty {
         (i32) => {
@@ -173,9 +160,9 @@ pub(crate) fn eval<'a>(
         ($depth:expr) => {{
             let target_depth = block_returns.len() - $depth as usize - 1;
             match bytecode.break_to(i, $depth) {
-                BreakDestination::BlockEnd(end) => {
+                BreakDestination::BlockEnd(end, tail_len) => {
                     i = end;
-                    let (tail_len, leave) = block_returns[target_depth];
+                    let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth);
                     let tail = stack.split_off(stack.len() - tail_len);
                     stack.truncate(leave);
@@ -183,7 +170,7 @@ pub(crate) fn eval<'a>(
                 }
                 BreakDestination::LoopStart(start) => {
                     i = start;
-                    let leave = block_returns[target_depth].1;
+                    let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth + 1);
                     stack.truncate(leave);
                 }
@@ -225,10 +212,10 @@ pub(crate) fn eval<'a>(
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
-                block_returns.push((get_returns_count(frame, ty), stack.len()));
+                block_returns.push(stack.len());
             }
             Operator::If { ty } => {
-                block_returns.push((get_returns_count(frame, ty), stack.len()));
+                block_returns.push(stack.len());
                 let c = pop!(i32);
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
@@ -864,7 +851,7 @@ pub(crate) fn eval<'a>(
     Ok(())
 }
 
-pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
+pub(crate) fn eval_const<'a>(context: &'a EvalContext, source: &dyn EvalSource) -> Val {
     let mut vals = vec![Default::default()];
     let mut frame = Frame::new(context, vec![]);
     let result = eval(&mut frame, source, &mut vals);

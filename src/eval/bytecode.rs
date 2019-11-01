@@ -1,3 +1,4 @@
+use crate::eval::EvalContext;
 use crate::module::ModuleData;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,12 +19,30 @@ pub(crate) struct BytecodeCache {
 
 #[derive(Debug, Clone)]
 pub enum BreakDestination {
-    BlockEnd(usize),
+    BlockEnd(usize, usize),
     LoopStart(usize),
 }
 
+fn get_returns_count(context: &EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
+    use wasmparser::{Type, TypeOrFuncType};
+    match ty {
+        TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
+        TypeOrFuncType::Type(_) => 1,
+        TypeOrFuncType::FuncType(index) => {
+            let ty = context.get_type(*index);
+            let len = ty.ty().returns.len();
+            len
+        }
+    }
+}
+
 impl BytecodeCache {
-    pub fn new(_module_data: Rc<RefCell<ModuleData>>, reader: OperatorsReader<'static>) -> Self {
+    pub fn new(
+        _module_data: Rc<RefCell<ModuleData>>,
+        reader: OperatorsReader<'static>,
+        context: &EvalContext,
+        returns_count: usize,
+    ) -> Self {
         let operators = reader
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -46,21 +65,23 @@ impl BytecodeCache {
                         break_cache.insert(br, BreakDestination::LoopStart(i + 1));
                     }
                 }
-                Operator::Block { .. } => {
+                Operator::Block { ref ty } => {
                     let (end, _, jumps) = control.pop().unwrap();
+                    let returns_count = get_returns_count(context, ty);
                     for br in jumps {
-                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1, returns_count));
                     }
                 }
-                Operator::If { .. } => {
+                Operator::If { ref ty } => {
                     let (end, maybe_else, jumps) = control.pop().unwrap();
                     if let Some(el) = maybe_else {
                         elses.insert(i, el + 1);
                     } else {
                         elses.insert(i, end + 1);
                     }
+                    let returns_count = get_returns_count(context, ty);
                     for br in jumps {
-                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1, returns_count));
                     }
                 }
 
@@ -87,7 +108,7 @@ impl BytecodeCache {
         assert!(control.len() == 1);
         let (end, _, jumps) = control.into_iter().next().unwrap();
         for br in jumps {
-            break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+            break_cache.insert(br, BreakDestination::BlockEnd(end + 1, returns_count));
         }
 
         BytecodeCache {

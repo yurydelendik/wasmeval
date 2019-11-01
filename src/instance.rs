@@ -185,8 +185,8 @@ fn eval_init_expr(data: &Rc<RefCell<InstanceData>>, init_expr: &InitExpr<'static
         }
     }
     let module_data = data.borrow().module_data.clone();
-    let bytecode = BytecodeCache::new(module_data, init_expr.get_operators_reader());
+    let ctx = EvalContext::new(data.clone());
+    let bytecode = BytecodeCache::new(module_data, init_expr.get_operators_reader(), &ctx, 1);
     let init_expr_source = S(bytecode);
-    let mut ctx = EvalContext::new(data.clone());
-    eval_const(&mut ctx, &init_expr_source)
+    eval_const(&ctx, &init_expr_source)
 }
