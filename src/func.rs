@@ -30,6 +30,7 @@ impl InstanceFunction {
 struct InstanceFunctionBody {
     bytecode: BytecodeCache,
     locals: Vec<(u32, Val)>,
+    frame_size: usize,
 }
 
 impl InstanceFunctionBody {
@@ -39,23 +40,26 @@ impl InstanceFunctionBody {
         params_arity: usize,
     ) -> Self {
         let mut locals = Vec::new();
-        let mut total_count = params_arity;
+        let mut frame_size = params_arity;
         for local in body.get_locals_reader().expect("reader").into_iter() {
             let (count, ty) = local.expect("local def");
             let local_val = get_default_value(ty.into());
             locals.push((count, local_val));
-            total_count += count as usize;
+            frame_size += count as usize;
         }
-        let _ = total_count;
 
         let reader = body.get_operators_reader().expect("operators reader");
         let bytecode = BytecodeCache::new(module_data, reader);
 
-        InstanceFunctionBody { bytecode, locals }
+        InstanceFunctionBody {
+            bytecode,
+            locals,
+            frame_size,
+        }
     }
 
     pub fn create_frame<'a>(&self, ctx: &'a EvalContext, params: &[Val]) -> Frame<'a> {
-        let mut locals = Vec::new();
+        let mut locals = Vec::with_capacity(self.frame_size);
         for param in params {
             locals.push(Local(param.clone()));
         }
