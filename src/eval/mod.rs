@@ -1,7 +1,7 @@
 use crate::values::{Trap, TrapKind, Val};
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
-pub(crate) use context::{EvalContext, Frame, Local};
+pub(crate) use context::{EvalContext, Frame};
 
 mod bytecode;
 mod context;
@@ -853,7 +853,7 @@ pub(crate) fn eval<'a>(
 
 pub(crate) fn eval_const<'a>(context: &'a EvalContext, source: &dyn EvalSource) -> Val {
     let mut vals = vec![Default::default()];
-    let mut frame = Frame::new(context, vec![]);
+    let mut frame = Frame::new(context, 0);
     let result = eval(&mut frame, source, &mut vals);
     match result {
         Ok(()) => vals.into_iter().next().unwrap(),

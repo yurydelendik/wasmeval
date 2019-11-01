@@ -2,7 +2,7 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use crate::eval::BytecodeCache;
-use crate::eval::{eval, EvalContext, EvalSource, Frame, Local};
+use crate::eval::{eval, EvalContext, EvalSource, Frame};
 use crate::externals::Func;
 use crate::instance::InstanceData;
 use crate::module::ModuleData;
@@ -61,16 +61,17 @@ impl InstanceFunctionBody {
     }
 
     pub fn create_frame<'a>(&self, ctx: &'a EvalContext, params: &[Val]) -> Frame<'a> {
-        let mut locals = Vec::with_capacity(self.frame_size);
-        for param in params {
-            locals.push(Local(param.clone()));
-        }
+        let f = Frame::new(&ctx, self.frame_size);
+        let locals = f.locals_mut();
+        locals[..params.len()].clone_from_slice(params);
+        let mut j = params.len();
         for (count, val) in self.locals.iter() {
             for _ in 0..*count {
-                locals.push(Local(val.clone()));
+                locals[j] = val.clone();
+                j += 1;
             }
         }
-        Frame::new(&ctx, locals)
+        f
     }
 }
 
