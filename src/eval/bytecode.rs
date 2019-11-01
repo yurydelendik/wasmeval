@@ -1,11 +1,15 @@
+use crate::module::ModuleData;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::vec::Vec;
 use wasmparser::OperatorsReader;
 
 pub use wasmparser::Operator;
 
-pub struct BytecodeCache<'a> {
-    operators: Vec<Operator<'a>>,
+pub(crate) struct BytecodeCache {
+    _module_data: Rc<RefCell<ModuleData>>,
+    operators: Vec<Operator<'static>>,
     parents: HashMap<usize, usize>,
     ends: Vec<(usize, usize)>,
     loops: HashMap<usize, usize>,
@@ -17,8 +21,8 @@ pub enum BreakDestination {
     LoopStart(usize),
 }
 
-impl<'a> BytecodeCache<'a> {
-    pub fn new(reader: OperatorsReader<'a>) -> Self {
+impl BytecodeCache {
+    pub fn new(_module_data: Rc<RefCell<ModuleData>>, reader: OperatorsReader<'static>) -> Self {
         let operators = reader
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -66,6 +70,7 @@ impl<'a> BytecodeCache<'a> {
         ends.reverse();
 
         BytecodeCache {
+            _module_data,
             operators,
             parents,
             ends,

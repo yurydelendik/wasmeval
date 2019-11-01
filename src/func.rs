@@ -5,18 +5,16 @@ use crate::eval::BytecodeCache;
 use crate::eval::{eval, EvalContext, EvalSource, Local};
 use crate::externals::Func;
 use crate::instance::InstanceData;
+use crate::module::ModuleData;
 use crate::values::{get_default_value, Trap, Val};
 
-pub(crate) struct InstanceFunction<'a> {
-    instance_data: Rc<RefCell<InstanceData<'a>>>,
+pub(crate) struct InstanceFunction {
+    instance_data: Rc<RefCell<InstanceData>>,
     defined_index: usize,
 }
 
-impl<'a> InstanceFunction<'a> {
-    pub(crate) fn new(
-        data: Rc<RefCell<InstanceData<'a>>>,
-        defined_index: usize,
-    ) -> InstanceFunction {
+impl InstanceFunction {
+    pub(crate) fn new(data: Rc<RefCell<InstanceData>>, defined_index: usize) -> InstanceFunction {
         InstanceFunction {
             instance_data: data,
             defined_index,
@@ -24,25 +22,28 @@ impl<'a> InstanceFunction<'a> {
     }
 }
 
-struct InstanceFunctionBody<'a> {
-    bytecode: BytecodeCache<'a>,
+struct InstanceFunctionBody {
+    bytecode: BytecodeCache,
 }
 
-impl<'a> InstanceFunctionBody<'a> {
-    pub fn new(body: &'a wasmparser::FunctionBody<'a>) -> Self {
+impl InstanceFunctionBody {
+    pub fn new(
+        module_data: Rc<RefCell<ModuleData>>,
+        body: &wasmparser::FunctionBody<'static>,
+    ) -> Self {
         let reader = body.get_operators_reader().expect("operators reader");
-        let bytecode = BytecodeCache::new(reader);
+        let bytecode = BytecodeCache::new(module_data, reader);
         InstanceFunctionBody { bytecode }
     }
 }
 
-impl<'a> EvalSource for InstanceFunctionBody<'a> {
+impl EvalSource for InstanceFunctionBody {
     fn bytecode(&self) -> &BytecodeCache {
         &self.bytecode
     }
 }
 
-impl<'a> Func for InstanceFunction<'a> {
+impl Func for InstanceFunction {
     fn params_arity(&self) -> usize {
         let module_data = Ref::map(self.instance_data.borrow(), |data| {
             data.module_data.as_ref()
@@ -64,15 +65,14 @@ impl<'a> Func for InstanceFunction<'a> {
     }
 
     fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
-        let module_data = Ref::map(self.instance_data.borrow(), |data| {
-            data.module_data.as_ref()
-        });
+        let module_data = self.instance_data.borrow().module_data.clone();
         let body = Ref::map(module_data.borrow(), |data| {
             &data.func_bodies[self.defined_index]
         });
         let locals = read_body_locals(params, &body);
         let mut ctx = EvalContext::new(self.instance_data.clone());
-        let body = Box::new(InstanceFunctionBody::new(&body));
+        let module_data = self.instance_data.borrow().module_data.clone();
+        let body = Box::new(InstanceFunctionBody::new(module_data, &body));
         let result = eval(&mut ctx, &*body, locals, self.results_arity());
         result
     }

@@ -8,16 +8,16 @@ use wabt::Features;
 
 use crate::{External, Func, Instance, Module, Trap, Val};
 
-fn parse_module<'a>(module: ModuleBinary) -> Result<Module<'a>, Error> {
+fn parse_module(module: ModuleBinary) -> Result<Module, Error> {
     let bin = module.into_vec().into_boxed_slice();
     let module = Module::new(bin)?;
     Ok(module)
 }
 
-fn instantiate_module<'a, 'b>(
-    context: &'b Context<'a>,
+fn instantiate_module<'b>(
+    context: &'b Context,
     module: ModuleBinary,
-) -> Result<(Instance<'a>, Module<'a>), Error> {
+) -> Result<(Instance, Module), Error> {
     let module = parse_module(module)?;
     let mut imports = Vec::new();
     for (module_name, field) in module.imports().into_iter() {
@@ -34,10 +34,7 @@ fn instantiate_module<'a, 'b>(
     Ok((instance, module))
 }
 
-fn call_func<'a>(
-    f: Rc<RefCell<dyn Func + 'a>>,
-    args: Vec<Value<f32, f64>>,
-) -> Result<Box<[Val]>, Trap> {
+fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Value<f32, f64>>) -> Result<Box<[Val]>, Trap> {
     let args = args
         .into_iter()
         .map(|a| match a {
@@ -52,10 +49,10 @@ fn call_func<'a>(
 }
 
 fn preform_action<'a, 'b>(
-    context: &'b Context<'a>,
+    context: &'b Context,
     action: Action<f32, f64>,
 ) -> Result<Box<[Val]>, Trap> {
-    let get_export = |module: Option<String>, field: String| -> Option<&External<'a>> {
+    let get_export = |module: Option<String>, field: String| -> Option<&External> {
         let (instance, module) = context.find_instance(module);
         module
             .exports()
@@ -122,12 +119,12 @@ fn assert_value(value: &Val, expected: &Value<f32, f64>) -> bool {
     }
 }
 
-struct Context<'a> {
-    instances: Vec<(Instance<'a>, Module<'a>)>,
+struct Context {
+    instances: Vec<(Instance, Module)>,
     aliases: HashMap<String, usize>,
     last: usize,
 }
-impl<'a> Context<'a> {
+impl Context {
     pub fn new() -> Self {
         let instances = vec![create_spectest()];
         let aliases: HashMap<String, usize> =
@@ -138,12 +135,7 @@ impl<'a> Context<'a> {
             last: !0,
         }
     }
-    pub fn add_instance(
-        &mut self,
-        instance: Instance<'a>,
-        module: Module<'a>,
-        name: Option<String>,
-    ) {
+    pub fn add_instance(&mut self, instance: Instance, module: Module, name: Option<String>) {
         let last = self.instances.len();
         self.instances.push((instance, module));
         self.last = last;
@@ -151,10 +143,7 @@ impl<'a> Context<'a> {
             self.aliases.insert(name, last);
         }
     }
-    pub fn find_instance<'b>(&'b self, name: Option<String>) -> &'b (Instance<'a>, Module<'a>)
-    where
-        'a: 'b,
-    {
+    pub fn find_instance<'b>(&'b self, name: Option<String>) -> &'b (Instance, Module) {
         if name.is_none() {
             return &self.instances[self.last];
         }
@@ -182,7 +171,7 @@ impl<'a> Context<'a> {
     }
 }
 
-fn create_spectest<'a>() -> (Instance<'a>, Module<'a>) {
+fn create_spectest() -> (Instance, Module) {
     let spectest_wasm: Box<[u8]> = Box::new([
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x1a, 0x06, 0x60, 0x00, 0x00, 0x60,
         0x01, 0x7f, 0x00, 0x60, 0x02, 0x7f, 0x7d, 0x00, 0x60, 0x02, 0x7c, 0x7c, 0x00, 0x60, 0x01,

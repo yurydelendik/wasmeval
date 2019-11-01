@@ -12,22 +12,22 @@ use crate::module::{Module, ModuleData};
 use crate::table::InstanceTable;
 use crate::values::Val;
 
-pub(crate) struct InstanceData<'a> {
-    pub module_data: Rc<RefCell<ModuleData<'a>>>,
+pub(crate) struct InstanceData {
+    pub module_data: Rc<RefCell<ModuleData>>,
     pub memories: Vec<Rc<RefCell<dyn Memory>>>,
     pub globals: Vec<Rc<RefCell<dyn Global>>>,
-    pub funcs: Vec<Rc<RefCell<dyn Func + 'a>>>,
-    pub tables: Vec<Rc<RefCell<dyn Table<'a> + 'a>>>,
+    pub funcs: Vec<Rc<RefCell<dyn Func>>>,
+    pub tables: Vec<Rc<RefCell<dyn Table>>>,
 }
 
-pub struct Instance<'a> {
+pub struct Instance {
     #[allow(dead_code)]
-    data: Rc<RefCell<InstanceData<'a>>>,
-    exports: Vec<External<'a>>,
+    data: Rc<RefCell<InstanceData>>,
+    exports: Vec<External>,
 }
 
-impl<'a> Instance<'a> {
-    pub fn new(module: &Module<'a>, externals: &[External<'a>]) -> Result<Instance<'a>, Error> {
+impl Instance {
+    pub fn new(module: &Module, externals: &[External]) -> Result<Instance, Error> {
         let module_data = module.data();
         if module_data.borrow().imports.len() != externals.len() {
             bail!("incompatible number of imports");
@@ -102,7 +102,7 @@ impl<'a> Instance<'a> {
                 .push(Rc::new(RefCell::new(global)));
         }
         for i in 0..module_data.borrow().func_types.len() {
-            let f: InstanceFunction<'a> = InstanceFunction::new(data.clone(), i);
+            let f: InstanceFunction = InstanceFunction::new(data.clone(), i);
             data.borrow_mut().funcs.push(Rc::new(RefCell::new(f)));
         }
 
@@ -172,19 +172,20 @@ impl<'a> Instance<'a> {
         Ok(Instance { data, exports })
     }
 
-    pub fn exports(&self) -> &[External<'a>] {
+    pub fn exports(&self) -> &[External] {
         &self.exports
     }
 }
 
-fn eval_init_expr(data: &Rc<RefCell<InstanceData>>, init_expr: &InitExpr<'_>) -> Val {
-    struct S<'s>(BytecodeCache<'s>);
-    impl<'s> EvalSource for S<'s> {
+fn eval_init_expr(data: &Rc<RefCell<InstanceData>>, init_expr: &InitExpr<'static>) -> Val {
+    struct S(BytecodeCache);
+    impl EvalSource for S {
         fn bytecode(&self) -> &BytecodeCache {
             &self.0
         }
     }
-    let bytecode = BytecodeCache::new(init_expr.get_operators_reader());
+    let module_data = data.borrow().module_data.clone();
+    let bytecode = BytecodeCache::new(module_data, init_expr.get_operators_reader());
     let init_expr_source = S(bytecode);
     let mut ctx = EvalContext::new(data.clone());
     eval_const(&mut ctx, &init_expr_source)

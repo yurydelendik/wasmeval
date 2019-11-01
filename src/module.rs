@@ -7,26 +7,26 @@ use wasmparser::{
     SectionCode, TableType,
 };
 
-pub(crate) struct ModuleData<'a> {
+pub(crate) struct ModuleData {
     pub buf: Pin<Box<[u8]>>,
     pub types: Box<[FuncType]>,
-    pub imports: Box<[Import<'a>]>,
-    pub exports: Box<[Export<'a>]>,
+    pub imports: Box<[Import<'static>]>,
+    pub exports: Box<[Export<'static>]>,
     pub memories: Box<[MemoryType]>,
-    pub data: Box<[Data<'a>]>,
+    pub data: Box<[Data<'static>]>,
     pub tables: Box<[TableType]>,
-    pub elements: Box<[Element<'a>]>,
-    pub globals: Box<[Global<'a>]>,
+    pub elements: Box<[Element<'static>]>,
+    pub globals: Box<[Global<'static>]>,
     pub func_types: Box<[u32]>,
-    pub func_bodies: Box<[FunctionBody<'a>]>,
+    pub func_bodies: Box<[FunctionBody<'static>]>,
     pub start_func: Option<u32>,
 }
 
-pub struct Module<'a> {
-    data: Rc<RefCell<ModuleData<'a>>>,
+pub struct Module {
+    data: Rc<RefCell<ModuleData>>,
 }
 
-fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
+fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
     let mut reader = {
         let buf = unsafe { &std::slice::from_raw_parts(buf.as_ptr(), buf.len()) };
         ModuleReader::new(buf)?
@@ -157,14 +157,14 @@ fn read_module_data<'a>(buf: Pin<Box<[u8]>>) -> Result<ModuleData<'a>, Error> {
     })
 }
 
-impl<'a> Module<'a> {
-    pub fn new(buf: Box<[u8]>) -> Result<Module<'a>, Error> {
+impl Module {
+    pub fn new(buf: Box<[u8]>) -> Result<Module, Error> {
         Ok(Module {
             data: Rc::new(RefCell::new(read_module_data(Pin::new(buf))?)),
         })
     }
 
-    pub(crate) fn data(&self) -> &Rc<RefCell<ModuleData<'a>>> {
+    pub(crate) fn data(&self) -> &Rc<RefCell<ModuleData>> {
         &self.data
     }
 

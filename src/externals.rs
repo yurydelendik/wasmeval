@@ -26,25 +26,25 @@ pub trait Global {
 #[derive(Debug)]
 pub struct TableOutOfBounds;
 
-pub trait Table<'a> {
-    fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func + 'a>>>, TableOutOfBounds>;
+pub trait Table {
+    fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds>;
     fn set_func(
         &mut self,
         index: u32,
-        f: Option<Rc<RefCell<dyn Func + 'a>>>,
+        f: Option<Rc<RefCell<dyn Func>>>,
     ) -> Result<(), TableOutOfBounds>;
 }
 
 #[derive(Clone)]
-pub enum External<'a> {
-    Func(Rc<RefCell<dyn Func + 'a>>),
+pub enum External {
+    Func(Rc<RefCell<dyn Func>>),
     Memory(Rc<RefCell<dyn Memory>>),
     Global(Rc<RefCell<dyn Global>>),
-    Table(Rc<RefCell<dyn Table<'a> + 'a>>),
+    Table(Rc<RefCell<dyn Table>>),
 }
 
-impl<'a> External<'a> {
-    pub fn func(&self) -> Option<&Rc<RefCell<dyn Func + 'a>>> {
+impl<'a> External {
+    pub fn func(&self) -> Option<&Rc<RefCell<dyn Func>>> {
         if let External::Func(f) = self {
             Some(f)
         } else {
@@ -60,7 +60,7 @@ impl<'a> External<'a> {
         }
     }
 
-    pub fn table(&self) -> Option<&Rc<RefCell<dyn Table<'a> + 'a>>> {
+    pub fn table(&self) -> Option<&Rc<RefCell<dyn Table>>> {
         if let External::Table(t) = self {
             Some(t)
         } else {
