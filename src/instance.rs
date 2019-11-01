@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasmparser::{DataKind, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
 
-use crate::eval::{eval_const, BytecodeCache, EvalContext, EvalSource};
+use crate::eval::{eval_const, BytecodeCache, EvalSource};
 use crate::externals::{External, Func, Global, Memory, Table};
 use crate::func::InstanceFunction;
 use crate::global::InstanceGlobal;
@@ -185,8 +185,7 @@ fn eval_init_expr(data: &Rc<RefCell<InstanceData>>, init_expr: &InitExpr<'static
         }
     }
     let module_data = data.borrow().module_data.clone();
-    let ctx = EvalContext::new(data.clone());
-    let bytecode = BytecodeCache::new(module_data, init_expr.get_operators_reader(), &ctx, 1);
+    let bytecode = BytecodeCache::new(module_data, init_expr.get_operators_reader(), data, 1);
     let init_expr_source = S(bytecode);
-    eval_const(&ctx, &init_expr_source)
+    eval_const(data, &init_expr_source)
 }

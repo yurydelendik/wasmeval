@@ -851,7 +851,7 @@ pub(crate) fn eval<'a>(
     Ok(())
 }
 
-pub(crate) fn eval_const<'a>(context: &'a EvalContext, source: &dyn EvalSource) -> Val {
+pub(crate) fn eval_const<'a>(context: &'a (dyn EvalContext + 'a), source: &dyn EvalSource) -> Val {
     let mut vals = vec![Default::default()];
     let mut frame = Frame::new(context, 0);
     let result = eval(&mut frame, source, &mut vals);

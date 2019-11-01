@@ -23,7 +23,7 @@ pub enum BreakDestination {
     LoopStart(usize),
 }
 
-fn get_returns_count(context: &EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
+fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
     use wasmparser::{Type, TypeOrFuncType};
     match ty {
         TypeOrFuncType::Type(Type::EmptyBlockType) => 0,
@@ -40,7 +40,7 @@ impl BytecodeCache {
     pub fn new(
         _module_data: Rc<RefCell<ModuleData>>,
         reader: OperatorsReader<'static>,
-        context: &EvalContext,
+        context: &dyn EvalContext,
         returns_count: usize,
     ) -> Self {
         let operators = reader

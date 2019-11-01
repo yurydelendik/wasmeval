@@ -12,17 +12,14 @@ pub(crate) struct InstanceFunction {
     instance_data: Rc<RefCell<InstanceData>>,
     defined_index: usize,
     cache: RefCell<Option<InstanceFunctionBody>>,
-    context: EvalContext,
 }
 
 impl InstanceFunction {
     pub(crate) fn new(data: Rc<RefCell<InstanceData>>, defined_index: usize) -> InstanceFunction {
-        let context = EvalContext::new(data.clone());
         InstanceFunction {
             instance_data: data,
             defined_index,
             cache: RefCell::new(None),
-            context,
         }
     }
 }
@@ -39,7 +36,7 @@ impl InstanceFunctionBody {
         body: &wasmparser::FunctionBody<'static>,
         params_arity: usize,
         results_arity: usize,
-        ctx: &EvalContext,
+        ctx: &dyn EvalContext,
     ) -> Self {
         let mut locals = Vec::new();
         let mut frame_size = params_arity;
@@ -60,8 +57,8 @@ impl InstanceFunctionBody {
         }
     }
 
-    pub fn create_frame<'a>(&self, ctx: &'a EvalContext, params: &[Val]) -> Frame<'a> {
-        let f = Frame::new(&ctx, self.frame_size);
+    pub fn create_frame<'a>(&self, ctx: &'a (dyn EvalContext + 'a), params: &[Val]) -> Frame<'a> {
+        let f = Frame::new(ctx, self.frame_size);
         let locals = f.locals_mut();
         locals[..params.len()].clone_from_slice(params);
         let mut j = params.len();
@@ -115,12 +112,15 @@ impl Func for InstanceFunction {
                 &body,
                 self.params_arity(),
                 self.results_arity(),
-                &self.context,
+                &self.instance_data,
             );
             *self.cache.borrow_mut() = Some(body);
         }
         let body = self.cache.borrow();
-        let mut frame = body.as_ref().unwrap().create_frame(&self.context, params);
+        let mut frame = body
+            .as_ref()
+            .unwrap()
+            .create_frame(&self.instance_data, params);
         eval(&mut frame, body.as_ref().unwrap(), results)
     }
 }

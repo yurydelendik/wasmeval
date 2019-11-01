@@ -6,32 +6,30 @@ use crate::instance::InstanceData;
 use crate::module::ModuleData;
 use crate::values::Val;
 
-pub(crate) struct EvalContext {
-    instance_data: Rc<RefCell<InstanceData>>,
+pub(crate) trait EvalContext {
+    fn get_function(&self, index: u32) -> Ref<Rc<RefCell<dyn Func>>>;
+    fn get_global(&self, index: u32) -> Ref<Rc<RefCell<dyn Global>>>;
+    fn get_memory(&self) -> Ref<Rc<RefCell<dyn Memory>>>;
+    fn get_table(&self, index: u32) -> Ref<Rc<RefCell<dyn Table>>>;
+    fn get_type(&self, index: u32) -> ModuleFuncType;
 }
 
-impl EvalContext {
-    pub fn new(instance_data: Rc<RefCell<InstanceData>>) -> Self {
-        EvalContext { instance_data }
+impl EvalContext for Rc<RefCell<InstanceData>> {
+    fn get_function(&self, index: u32) -> Ref<Rc<RefCell<dyn Func>>> {
+        Ref::map(self.borrow(), |i| &i.funcs[index as usize])
     }
-    pub fn get_function(&self, index: u32) -> Ref<Rc<RefCell<dyn Func>>> {
-        Ref::map(self.instance_data.borrow(), |i| &i.funcs[index as usize])
+    fn get_global(&self, index: u32) -> Ref<Rc<RefCell<dyn Global>>> {
+        Ref::map(self.borrow(), |i| &i.globals[index as usize])
     }
-    pub fn get_global(&self, index: u32) -> Ref<Rc<RefCell<dyn Global>>> {
-        Ref::map(self.instance_data.borrow(), |i| &i.globals[index as usize])
-    }
-    pub fn get_memory(&self) -> Ref<Rc<RefCell<dyn Memory>>> {
+    fn get_memory(&self) -> Ref<Rc<RefCell<dyn Memory>>> {
         const INDEX: usize = 0;
-        Ref::map(self.instance_data.borrow(), |i| &i.memories[INDEX])
+        Ref::map(self.borrow(), |i| &i.memories[INDEX])
     }
-    pub fn get_table(&self, index: u32) -> Ref<Rc<RefCell<dyn Table>>> {
-        Ref::map(self.instance_data.borrow(), |i| &i.tables[index as usize])
+    fn get_table(&self, index: u32) -> Ref<Rc<RefCell<dyn Table>>> {
+        Ref::map(self.borrow(), |i| &i.tables[index as usize])
     }
-    pub fn get_type(&self, index: u32) -> ModuleFuncType {
-        ModuleFuncType(
-            self.instance_data.borrow().module_data.clone(),
-            index as usize,
-        )
+    fn get_type(&self, index: u32) -> ModuleFuncType {
+        ModuleFuncType(self.borrow().module_data.clone(), index as usize)
     }
 }
 
@@ -46,13 +44,13 @@ impl ModuleFuncType {
 static mut FRAME_LOCALS: Option<Vec<Val>> = None;
 
 pub(crate) struct Frame<'a> {
-    context: &'a EvalContext,
+    context: &'a (dyn EvalContext + 'a),
     fp: usize,
     size: usize,
 }
 
 impl<'a> Frame<'a> {
-    pub fn new(context: &'a EvalContext, size: usize) -> Self {
+    pub fn new(context: &'a (dyn EvalContext + 'a), size: usize) -> Self {
         let fp = unsafe {
             if FRAME_LOCALS.is_none() {
                 FRAME_LOCALS = Some(Vec::with_capacity(0x1000));
@@ -75,8 +73,8 @@ impl<'a> Frame<'a> {
     pub fn locals_mut(&self) -> &mut [Val] {
         unsafe { &mut FRAME_LOCALS.as_mut().unwrap()[self.fp..self.fp + self.size] }
     }
-    pub fn context(&self) -> &EvalContext {
-        &self.context
+    pub fn context(&'a self) -> &'a (dyn EvalContext + 'a) {
+        self.context
     }
 }
 
