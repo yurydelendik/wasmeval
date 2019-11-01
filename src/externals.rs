@@ -7,7 +7,7 @@ use crate::values::{Trap, Val};
 pub trait Func {
     fn params_arity(&self) -> usize;
     fn results_arity(&self) -> usize;
-    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
 }
 
 pub trait Memory {

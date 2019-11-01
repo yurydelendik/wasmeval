@@ -45,7 +45,10 @@ fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Value<f32, f64>>) -> Result<Box
             _ => unimplemented!(),
         })
         .collect::<Vec<_>>();
-    f.borrow().call(&args)
+    let mut out = vec![Default::default(); f.borrow().results_arity()];
+    f.borrow()
+        .call(&args, &mut out)
+        .map(move |()| out.into_boxed_slice())
 }
 
 fn preform_action<'a, 'b>(

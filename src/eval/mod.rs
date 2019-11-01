@@ -34,13 +34,14 @@ pub(crate) fn eval<'a>(
     context: &'a mut EvalContext,
     source: &dyn EvalSource,
     locals: Vec<Local>,
-    return_arity: usize,
-) -> Result<Box<[Val]>, Trap> {
+    returns: &mut [Val],
+) -> Result<(), Trap> {
+    let return_arity = returns.len();
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
     let mut frame = Frame::new(context, locals);
-    let mut stack: Vec<Val> = Vec::new();
+    let mut stack: Vec<Val> = Vec::with_capacity(100);
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     block_returns.push((return_arity, 0));
 
@@ -194,16 +195,13 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! call {
         ($f:expr) => {{
-            let params = stack.split_off(stack.len() - $f.borrow().params_arity());
-            let result = $f.borrow().call(&params);
+            let sp = stack.len() - $f.borrow().params_arity();
+            // TODO better signature check
+            let mut returns = vec![Default::default(); $f.borrow().results_arity()];
+            let result = $f.borrow().call(&stack[sp..], &mut returns);
+            stack.truncate(sp);
             match result {
-                Ok(returns) => {
-                    // TODO better signature check
-                    if $f.borrow().results_arity() != returns.len() {
-                        trap!(TrapKind::SignatureMismatch);
-                    }
-                    stack.extend_from_slice(&returns)
-                }
+                Ok(()) => stack.extend(returns),
                 Err(trap) => {
                     return Err(trap);
                 }
@@ -864,16 +862,15 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
-    if stack.len() != return_arity {
-        stack = stack.split_off(stack.len() - return_arity);
-    }
-    Ok(stack.into_boxed_slice())
+    returns.clone_from_slice(&stack[stack.len() - return_arity..]);
+    Ok(())
 }
 
 pub(crate) fn eval_const<'a>(context: &'a mut EvalContext, source: &dyn EvalSource) -> Val {
-    let result = eval(context, source, vec![], 1);
+    let mut vals = vec![Default::default()];
+    let result = eval(context, source, vec![], &mut vals);
     match result {
-        Ok(val) => val[0].clone(),
+        Ok(()) => vals.into_iter().next().unwrap(),
         Err(_) => {
             panic!("trap duing eval_const");
         }

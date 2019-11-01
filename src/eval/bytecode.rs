@@ -16,7 +16,7 @@ pub(crate) struct BytecodeCache {
     break_cache: HashMap<(usize, u32), BreakDestination>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum BreakDestination {
     BlockEnd(usize),
     LoopStart(usize),

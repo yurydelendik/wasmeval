@@ -165,7 +165,7 @@ impl Instance {
             debug_assert!(f.borrow().params_arity() == 0 && f.borrow().results_arity() == 0);
             // TODO handle better start's trap
             f.borrow()
-                .call(&[])
+                .call(&[], &mut [])
                 .map_err(|_trap| format_err!("start function trapped"))?;
         }
 

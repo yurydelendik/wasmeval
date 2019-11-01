@@ -49,6 +49,12 @@ impl Val {
     }
 }
 
+impl Default for Val {
+    fn default() -> Self {
+        Val::I32(0)
+    }
+}
+
 pub enum ValType {
     I32,
     I64,

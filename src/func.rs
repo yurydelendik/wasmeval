@@ -88,7 +88,8 @@ impl Func for InstanceFunction {
         func_type.returns.len()
     }
 
-    fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
+        debug_assert!(self.results_arity() == results.len());
         if self.cache.borrow().is_none() {
             let module_data = self.instance_data.borrow().module_data.clone();
             let body = Ref::map(module_data.borrow(), |data| {
@@ -101,12 +102,6 @@ impl Func for InstanceFunction {
         let body = self.cache.borrow();
         let locals = body.as_ref().unwrap().create_locals(params);
         let mut ctx = EvalContext::new(self.instance_data.clone());
-        let result = eval(
-            &mut ctx,
-            body.as_ref().unwrap(),
-            locals,
-            self.results_arity(),
-        );
-        result
+        eval(&mut ctx, body.as_ref().unwrap(), locals, results)
     }
 }

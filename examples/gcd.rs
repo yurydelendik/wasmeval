@@ -15,11 +15,12 @@ fn main() -> Result<(), Error> {
         .expect("gcd export");
     let instance = Instance::new(&module, &[])?;
     let gcd = &instance.exports()[gcd_index];
-    if let Ok(result) = gcd
+    let mut result = vec![Default::default()];
+    if let Ok(()) = gcd
         .func()
         .unwrap()
         .borrow()
-        .call(&[Val::I32(6), Val::I32(27)])
+        .call(&[Val::I32(6), Val::I32(27)], &mut result)
     {
         println!("{:?}", result);
         return Ok(());

@@ -16,9 +16,9 @@ impl Func for Callback {
         0
     }
 
-    fn call(&self, _params: &[Val]) -> Result<Box<[Val]>, Trap> {
+    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
         println!("Hello, world!");
-        Ok(Box::new([]))
+        Ok(())
     }
 }
 
@@ -27,8 +27,7 @@ fn main() -> Result<(), Error> {
     let module = Module::new(bin.into_boxed_slice())?;
     let instance = Instance::new(&module, &[External::Func(Rc::new(RefCell::new(Callback)))])?;
     let hello = &instance.exports()[0];
-    if let Ok(result) = hello.func().unwrap().borrow().call(&[]) {
-        println!("{:?}", result);
+    if let Ok(()) = hello.func().unwrap().borrow().call(&[], &mut []) {
         return Ok(());
     }
     bail!("some error")

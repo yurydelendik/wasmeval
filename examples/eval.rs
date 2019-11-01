@@ -28,7 +28,8 @@ fn main() -> Result<(), Error> {
     let instance = Instance::new(&module, &[])?;
     if let Some(fn_index) = fn_index {
         let f = &instance.exports()[fn_index];
-        if let Ok(result) = f.func().unwrap().borrow().call(&[]) {
+        let mut result = vec![Default::default()];
+        if let Ok(()) = f.func().unwrap().borrow().call(&[], &mut result) {
             println!("{:?}", result);
             return Ok(());
         }
