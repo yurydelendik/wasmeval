@@ -10,13 +10,13 @@ pub use wasmparser::Operator;
 pub(crate) struct BytecodeCache {
     _module_data: Rc<RefCell<ModuleData>>,
     operators: Vec<Operator<'static>>,
-    parents: HashMap<usize, usize>,
-    ends: Vec<(usize, usize)>,
-    loops: HashMap<usize, usize>,
+    ends: HashMap<usize, usize>,
     elses: HashMap<usize, usize>,
     max_control_depth: usize,
+    break_cache: HashMap<(usize, u32), BreakDestination>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BreakDestination {
     BlockEnd(usize),
     LoopStart(usize),
@@ -28,91 +28,88 @@ impl BytecodeCache {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .expect("ops");
-        let mut parents = HashMap::new();
-        let mut ends = Vec::new();
-        let mut loops = HashMap::new();
+        let mut ends = HashMap::new();
         let mut elses = HashMap::new();
         let mut max_control_depth = 0;
+        let mut break_cache = HashMap::new();
 
-        let mut control = Vec::new();
+        let mut control: Vec<(usize, Option<usize>, Vec<(usize, u32)>)> = Vec::new();
         for i in (0..operators.len()).rev() {
             match operators[i] {
                 Operator::End => {
-                    if let Some(&(last, _)) = control.last() {
-                        parents.insert(i, last);
-                        ends.push((i, last));
-                    }
-                    control.push((i, None));
+                    control.push((i, None, Vec::new()));
                     max_control_depth = max_control_depth.max(control.len());
                 }
                 Operator::Loop { .. } => {
-                    let (end, _) = control.pop().unwrap();
-                    ends.push((i, end));
-                    loops.insert(end, i);
+                    let (_, _, jumps) = control.pop().unwrap();
+                    for br in jumps {
+                        break_cache.insert(br, BreakDestination::LoopStart(i + 1));
+                    }
                 }
                 Operator::Block { .. } => {
-                    let (end, _) = control.pop().unwrap();
-                    ends.push((i, end));
+                    let (end, _, jumps) = control.pop().unwrap();
+                    for br in jumps {
+                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+                    }
                 }
                 Operator::If { .. } => {
-                    let (end, maybe_else) = control.pop().unwrap();
+                    let (end, maybe_else, jumps) = control.pop().unwrap();
                     if let Some(el) = maybe_else {
-                        elses.insert(i, el);
+                        elses.insert(i, el + 1);
+                    } else {
+                        elses.insert(i, end + 1);
                     }
-                    ends.push((i, end));
+                    for br in jumps {
+                        break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+                    }
                 }
+
                 Operator::Else => {
                     control.last_mut().unwrap().1 = Some(i);
+                    ends.insert(i, control.last_mut().unwrap().0 + 1);
                 }
+
+                Operator::Br { relative_depth } | Operator::BrIf { relative_depth } => {
+                    let j = control.len() - 1 - relative_depth as usize;
+                    control[j].2.push((i, relative_depth));
+                }
+                Operator::BrTable { ref table } => {
+                    for relative_depth in table.clone().into_iter() {
+                        let j = control.len() - 1 - relative_depth as usize;
+                        control[j].2.push((i, relative_depth));
+                    }
+                }
+
                 _ => (),
             }
         }
 
         assert!(control.len() == 1);
-        ends.push((0, control[0].0));
-        ends.reverse();
+        let (end, _, jumps) = control.into_iter().next().unwrap();
+        for br in jumps {
+            break_cache.insert(br, BreakDestination::BlockEnd(end + 1));
+        }
 
         BytecodeCache {
             _module_data,
             operators,
-            parents,
             ends,
-            loops,
             elses,
             max_control_depth,
+            break_cache,
         }
     }
 
     pub fn break_to(&self, from: usize, depth: u32) -> BreakDestination {
-        let mut end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
-            Ok(i) => self.ends[i].1,
-            Err(i) => self.ends[i - 1].1,
-        };
-        for _ in 0..depth {
-            end = self.parents[&end];
-        }
-        if let Some(i) = self.loops.get(&end) {
-            BreakDestination::LoopStart(*i + 1)
-        } else {
-            BreakDestination::BlockEnd(end + 1)
-        }
+        self.break_cache[&(from, depth)].clone()
     }
 
     pub fn skip_to_else(&self, from_if: usize) -> usize {
-        // TODO assert from_if for if
-        if let Some(el) = self.elses.get(&from_if) {
-            return *el + 1;
-        }
-        // No else, skipping
-        self.skip_to_end(from_if)
+        self.elses[&from_if].clone()
     }
 
-    pub fn skip_to_end(&self, from: usize) -> usize {
-        let end = match self.ends.binary_search_by_key(&from, |&(i, _)| i) {
-            Ok(i) => self.ends[i].1,
-            Err(i) => self.ends[i - 1].1,
-        };
-        end + 1
+    pub fn skip_to_end(&self, from_else: usize) -> usize {
+        self.ends[&from_else].clone()
     }
 
     pub fn len(&self) -> usize {
