@@ -1,4 +1,6 @@
 use crate::values::{Trap, TrapKind, Val};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 pub(crate) use context::{EvalContext, Frame};
@@ -28,6 +30,7 @@ pub(crate) fn eval<'a>(
     let mut i = 0;
     let mut stack: Vec<Val> = Vec::with_capacity(100);
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
+    let mut memory_cache: Option<Rc<RefCell<_>>> = None;
     block_returns.push(0);
 
     macro_rules! val_ty {
@@ -124,15 +127,18 @@ pub(crate) fn eval<'a>(
             push!(val; $ty);
         }};
     }
+    macro_rules! memory {
+        () => {
+            memory_cache.get_or_insert_with(|| frame.context().get_memory().clone())
+        };
+    }
     macro_rules! store {
         ($memarg:expr; $ty:ident) => {{
             let val = pop!($ty);
             let offset = pop!(i32) as u32;
-            let ptr = frame.context().get_memory().borrow_mut().content_ptr_mut(
-                $memarg,
-                offset,
-                val_size!($ty),
-            );
+            let ptr = memory!()
+                .borrow_mut()
+                .content_ptr_mut($memarg, offset, val_size!($ty));
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
             }
@@ -143,7 +149,7 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let val = pop!($ty) as $tt;
             let offset = pop!(i32) as u32;
-            let ptr = frame.context().get_memory().borrow_mut().content_ptr_mut(
+            let ptr = memory!().borrow_mut().content_ptr_mut(
                 $memarg,
                 offset,
                 std::mem::size_of::<$tt>() as u32,
