@@ -1,6 +1,7 @@
 use crate::values::{Trap, TrapKind, Val};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::slice;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 pub(crate) use context::{EvalContext, Frame};
@@ -16,6 +17,18 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     let i = table.len().min(i as usize);
     let it = table.clone().into_iter();
     it.skip(i).next().expect("valid br_table entry")
+}
+
+fn remove_vec_items<T>(vec: &mut Vec<T>, index: usize, len: usize) {
+    match len {
+        0 => (),
+        1 => drop(vec.remove(index)),
+        _ => {
+            vec[index + len..].reverse();
+            vec[index..].reverse();
+            vec.truncate(vec.len() - len);
+        }
+    }
 }
 
 #[allow(unused_variables)]
@@ -186,13 +199,26 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! call {
         ($f:expr) => {{
-            let sp = stack.len() - $f.borrow().params_arity();
             // TODO better signature check
-            let mut returns = vec![Default::default(); $f.borrow().results_arity()];
-            let result = $f.borrow().call(&stack[sp..], &mut returns);
-            stack.truncate(sp);
+            let params_len = $f.borrow().params_arity();
+            let results_len = $f.borrow().results_arity();
+            let top = stack.len();
+            stack.resize_with(top + results_len, Default::default);
+            let params = if params_len > 0 {
+                unsafe { slice::from_raw_parts(&stack[top - params_len], params_len) }
+            } else {
+                &[]
+            };
+            let results = if results_len > 0 {
+                unsafe { slice::from_raw_parts_mut(&mut stack[top], results_len) }
+            } else {
+                &mut []
+            };
+            let result = $f.borrow().call(params, results);
             match result {
-                Ok(()) => stack.extend(returns),
+                Ok(()) => {
+                    remove_vec_items(&mut stack, top - params_len, params_len);
+                }
                 Err(trap) => {
                     return Err(trap);
                 }
