@@ -19,15 +19,57 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     it.skip(i).next().expect("valid br_table entry")
 }
 
-fn remove_vec_items<T>(vec: &mut Vec<T>, index: usize, len: usize) {
-    match len {
-        0 => (),
-        1 => drop(vec.remove(index)),
-        _ => {
-            vec[index + len..].reverse();
-            vec[index..].reverse();
-            vec.truncate(vec.len() - len);
+struct EvalStack(Vec<Val>);
+
+impl EvalStack {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        //EvalStack(Vec::new())
+        EvalStack(Vec::with_capacity(100))
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn last(&self) -> &Val {
+        self.0.last().unwrap()
+    }
+    pub fn last_mut(&mut self) -> &mut Val {
+        self.0.last_mut().unwrap()
+    }
+    pub fn pop(&mut self) -> Val {
+        self.0.pop().unwrap()
+    }
+    pub fn push(&mut self, val: Val) {
+        self.0.push(val);
+    }
+    pub fn truncate(&mut self, at: usize) {
+        self.0.truncate(at);
+    }
+    pub fn resize_with_default(&mut self, len: usize) {
+        self.0.resize_with(len, Default::default);
+    }
+    pub fn remove_items(&mut self, index: usize, len: usize) {
+        match len {
+            0 => (),
+            1 => drop(self.0.remove(index)),
+            _ => {
+                let vec = &mut self.0;
+                if index + len < vec.len() {
+                    vec[index + len..].reverse();
+                    vec[index..].reverse();
+                }
+                vec.truncate(vec.len() - len);
+            }
         }
+    }
+    pub fn tail(&self, len: usize) -> &[Val] {
+        &self.0[self.0.len() - len..]
+    }
+    pub fn item_ptr(&self, index: usize) -> *const Val {
+        &self.0[index]
+    }
+    pub fn item_mut_ptr(&mut self, index: usize) -> *mut Val {
+        &mut self.0[index]
     }
 }
 
@@ -41,7 +83,7 @@ pub(crate) fn eval<'a>(
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
-    let mut stack: Vec<Val> = Vec::with_capacity(100);
+    let mut stack = EvalStack::new();
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     let mut memory_cache: Option<Rc<RefCell<_>>> = None;
     block_returns.push(0);
@@ -95,7 +137,7 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! pop {
         ($ty:ident) => {
-            stack.pop().unwrap().$ty().unwrap()
+            stack.pop().$ty().unwrap()
         };
     }
     macro_rules! trap {
@@ -183,9 +225,7 @@ pub(crate) fn eval<'a>(
                     i = end;
                     let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth);
-                    let tail = stack.split_off(stack.len() - tail_len);
-                    stack.truncate(leave);
-                    stack.extend(tail);
+                    stack.remove_items(leave, stack.len() - tail_len - leave);
                 }
                 BreakDestination::LoopStart(start) => {
                     i = start;
@@ -203,21 +243,21 @@ pub(crate) fn eval<'a>(
             let params_len = $f.borrow().params_arity();
             let results_len = $f.borrow().results_arity();
             let top = stack.len();
-            stack.resize_with(top + results_len, Default::default);
+            stack.resize_with_default(top + results_len);
             let params = if params_len > 0 {
-                unsafe { slice::from_raw_parts(&stack[top - params_len], params_len) }
+                unsafe { slice::from_raw_parts(stack.item_ptr(top - params_len), params_len) }
             } else {
                 &[]
             };
             let results = if results_len > 0 {
-                unsafe { slice::from_raw_parts_mut(&mut stack[top], results_len) }
+                unsafe { slice::from_raw_parts_mut(stack.item_mut_ptr(top), results_len) }
             } else {
                 &mut []
             };
             let result = $f.borrow().call(params, results);
             match result {
                 Ok(()) => {
-                    remove_vec_items(&mut stack, top - params_len, params_len);
+                    stack.remove_items(top - params_len, params_len);
                 }
                 Err(trap) => {
                     return Err(trap);
@@ -247,8 +287,8 @@ pub(crate) fn eval<'a>(
                 block_returns.push(stack.len());
             }
             Operator::If { ty } => {
-                block_returns.push(stack.len());
                 let c = pop!(i32);
+                block_returns.push(stack.len());
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
                     continue;
@@ -301,22 +341,22 @@ pub(crate) fn eval<'a>(
                 call!(f)
             }
             Operator::Drop => {
-                stack.pop().unwrap();
+                stack.pop();
             }
             Operator::Select => {
                 let c = pop!(i32);
                 if c != 0 {
-                    stack.pop().unwrap();
+                    stack.pop();
                 } else {
-                    *stack.last_mut().unwrap() = stack.pop().unwrap();
+                    *stack.last_mut() = stack.pop();
                 }
             }
             Operator::GetLocal { local_index } => stack.push(frame.get_local(*local_index).clone()),
             Operator::SetLocal { local_index } => {
-                *frame.get_local_mut(*local_index) = stack.pop().unwrap();
+                *frame.get_local_mut(*local_index) = stack.pop();
             }
             Operator::TeeLocal { local_index } => {
-                *frame.get_local_mut(*local_index) = stack.last().unwrap().clone();
+                *frame.get_local_mut(*local_index) = stack.last().clone();
             }
             Operator::GetGlobal { global_index } => {
                 let g = frame.context().get_global(*global_index);
@@ -324,7 +364,7 @@ pub(crate) fn eval<'a>(
             }
             Operator::SetGlobal { global_index } => {
                 let g = frame.context().get_global(*global_index);
-                *g.borrow_mut().content_mut() = stack.pop().unwrap();
+                *g.borrow_mut().content_mut() = stack.pop();
             }
             Operator::I32Load { memarg } => {
                 load!(memarg; i32);
@@ -879,7 +919,7 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
-    returns.clone_from_slice(&stack[stack.len() - return_arity..]);
+    returns.clone_from_slice(stack.tail(return_arity));
     Ok(())
 }
 
