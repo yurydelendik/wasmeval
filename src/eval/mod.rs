@@ -21,11 +21,12 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
 
 struct EvalStack(Vec<Val>);
 
+const DEFAULT_STACK_CAPACITY: usize = 100;
+
 impl EvalStack {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        //EvalStack(Vec::new())
-        EvalStack(Vec::with_capacity(100))
+        EvalStack(Vec::with_capacity(DEFAULT_STACK_CAPACITY))
     }
     pub fn len(&self) -> usize {
         self.0.len()
@@ -71,7 +72,16 @@ impl EvalStack {
     pub fn item_mut_ptr(&mut self, index: usize) -> *mut Val {
         &mut self.0[index]
     }
+    pub fn clear(&mut self) {
+        if self.0.len() > DEFAULT_STACK_CAPACITY {
+            self.0.truncate(DEFAULT_STACK_CAPACITY);
+            self.0.shrink_to_fit();
+        }
+        self.0.clear();
+    }
 }
+
+static mut EVAL_STACKS: Option<Vec<EvalStack>> = None;
 
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
@@ -83,7 +93,12 @@ pub(crate) fn eval<'a>(
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
-    let mut stack = EvalStack::new();
+    let mut stack = unsafe {
+        EVAL_STACKS
+            .get_or_insert_with(|| Vec::new())
+            .pop()
+            .unwrap_or_else(|| EvalStack::new())
+    };
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     let mut memory_cache: Option<Rc<RefCell<_>>> = None;
     block_returns.push(0);
@@ -920,6 +935,10 @@ pub(crate) fn eval<'a>(
         i += 1;
     }
     returns.clone_from_slice(stack.tail(return_arity));
+    stack.clear();
+    unsafe {
+        EVAL_STACKS.as_mut().unwrap().push(stack);
+    }
     Ok(())
 }
 
