@@ -1,15 +1,12 @@
 use crate::eval::EvalContext;
-use crate::module::ModuleData;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::vec::Vec;
 use wasmparser::OperatorsReader;
 
 pub use wasmparser::Operator;
 
 pub(crate) struct BytecodeCache {
-    _module_data: Rc<RefCell<ModuleData>>,
+    // TODO anchor Operator<'static> lifetime to ModuleData
     operators: Vec<Operator<'static>>,
     ends: HashMap<usize, usize>,
     elses: HashMap<usize, usize>,
@@ -30,7 +27,7 @@ fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType)
         TypeOrFuncType::Type(_) => 1,
         TypeOrFuncType::FuncType(index) => {
             let ty = context.get_type(*index);
-            let len = ty.ty().returns.len();
+            let len = ty.borrow().ty().returns.len();
             len
         }
     }
@@ -38,7 +35,6 @@ fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType)
 
 impl BytecodeCache {
     pub fn new(
-        _module_data: Rc<RefCell<ModuleData>>,
         reader: OperatorsReader<'static>,
         context: &dyn EvalContext,
         returns_count: usize,
@@ -112,7 +108,6 @@ impl BytecodeCache {
         }
 
         BytecodeCache {
-            _module_data,
             operators,
             ends,
             elses,

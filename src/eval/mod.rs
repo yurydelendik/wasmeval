@@ -4,7 +4,9 @@ use std::rc::Rc;
 use std::slice;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
-pub(crate) use context::{EvalContext, Frame};
+pub(crate) use context::Frame;
+
+pub use context::{EvalContext, FuncType};
 
 mod bytecode;
 mod context;
@@ -348,8 +350,8 @@ pub(crate) fn eval<'a>(
                     Err(_) => trap!(TrapKind::UndefinedElement),
                 };
                 // TODO detailed signature check
-                if f.borrow().params_arity() != ty.ty().params.len()
-                    || f.borrow().results_arity() != ty.ty().returns.len()
+                if f.borrow().params_arity() != ty.borrow().ty().params.len()
+                    || f.borrow().results_arity() != ty.borrow().ty().returns.len()
                 {
                     trap!(TrapKind::SignatureMismatch);
                 }

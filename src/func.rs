@@ -25,6 +25,7 @@ impl InstanceFunction {
 }
 
 struct InstanceFunctionBody {
+    _module_data: Rc<RefCell<ModuleData>>,
     bytecode: BytecodeCache,
     locals: Vec<(u32, Val)>,
     frame_size: usize,
@@ -48,9 +49,10 @@ impl InstanceFunctionBody {
         }
 
         let reader = body.get_operators_reader().expect("operators reader");
-        let bytecode = BytecodeCache::new(module_data, reader, ctx, results_arity);
+        let bytecode = BytecodeCache::new(reader, ctx, results_arity);
 
         InstanceFunctionBody {
+            _module_data: module_data,
             bytecode,
             locals,
             frame_size,

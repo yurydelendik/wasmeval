@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::MemoryImmediate;
+pub use wasmparser::MemoryImmediate;
 
 use crate::values::{Trap, Val};
 
