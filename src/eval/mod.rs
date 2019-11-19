@@ -377,11 +377,11 @@ pub(crate) fn eval<'a>(
             }
             Operator::GetGlobal { global_index } => {
                 let g = frame.context().get_global(*global_index);
-                stack.push(g.borrow().content().clone());
+                stack.push(g.borrow().content());
             }
             Operator::SetGlobal { global_index } => {
                 let g = frame.context().get_global(*global_index);
-                *g.borrow_mut().content_mut() = stack.pop();
+                g.borrow_mut().set_content(&stack.pop());
             }
             Operator::I32Load { memarg } => {
                 load!(memarg; i32);

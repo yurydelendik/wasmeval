@@ -64,11 +64,11 @@ impl Ctx {
     pub fn new() -> Self {
         struct G(Val);
         impl Global for G {
-            fn content(&self) -> &Val {
-                &self.0
+            fn content(&self) -> Val {
+                self.0.clone()
             }
-            fn content_mut(&mut self) -> &mut Val {
-                &mut self.0
+            fn set_content(&mut self, val: &Val) {
+                self.0 = val.clone();
             }
         }
         #[inline]

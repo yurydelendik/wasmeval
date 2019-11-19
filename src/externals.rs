@@ -19,8 +19,8 @@ pub trait Memory {
 }
 
 pub trait Global {
-    fn content(&self) -> &Val;
-    fn content_mut(&mut self) -> &mut Val;
+    fn content(&self) -> Val;
+    fn set_content(&mut self, val: &Val);
 }
 
 #[derive(Debug)]
