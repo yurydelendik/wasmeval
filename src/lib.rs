@@ -1,9 +1,15 @@
 pub use crate::eval::{EvalContext, FuncType};
-pub use crate::externals::{External, Func, Global, Memory, MemoryImmediate, Table};
+pub use crate::externals::{
+    External, Func, Global, Memory, MemoryImmediate, Table, TableOutOfBounds,
+};
 pub use crate::instance::Instance;
 pub use crate::memory::InstanceMemory;
 pub use crate::module::Module;
 pub use crate::values::{Trap, Val, ValType};
+
+pub mod data {
+    pub use wasmparser::{FuncType, Type};
+}
 
 use crate::eval::{eval as eval_internal, BytecodeCache, EvalSource, Frame};
 use crate::values::get_default_value;

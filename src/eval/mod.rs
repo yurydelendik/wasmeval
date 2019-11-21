@@ -344,7 +344,7 @@ pub(crate) fn eval<'a>(
                 let func_index = pop!(i32) as u32;
                 let table = frame.context().get_table(*table_index);
                 let ty = frame.context().get_type(*index);
-                let f = match table.borrow().get_func(func_index) {
+                let f = match table.borrow().get_func_with_type(func_index, *index) {
                     Ok(Some(f)) => f,
                     Ok(None) => trap!(TrapKind::Uninitialized),
                     Err(_) => trap!(TrapKind::UndefinedElement),

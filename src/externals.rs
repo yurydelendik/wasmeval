@@ -28,6 +28,14 @@ pub struct TableOutOfBounds;
 
 pub trait Table {
     fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds>;
+    fn get_func_with_type(
+        &self,
+        index: u32,
+        _type_index: u32,
+    ) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds> {
+        // TODO really check type
+        self.get_func(index)
+    }
     fn set_func(
         &mut self,
         index: u32,
