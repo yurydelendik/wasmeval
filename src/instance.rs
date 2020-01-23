@@ -1,7 +1,9 @@
 use failure::{bail, format_err, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasmparser::{DataKind, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr};
+use wasmparser::{
+    DataKind, ElementItem, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr,
+};
 
 use crate::eval::{eval_const, BytecodeCache, EvalSource};
 use crate::externals::{External, Func, Global, Memory, Table};
@@ -136,7 +138,13 @@ impl Instance {
                         .into_iter()
                         .enumerate()
                     {
-                        let index = item.expect("func_index");
+                        let index = item
+                            .ok()
+                            .and_then(|item| match item {
+                                ElementItem::Func(index) => Some(index),
+                                _ => None,
+                            })
+                            .expect("func_index");
                         let f = data.borrow().funcs[index as usize].clone();
                         data.borrow().tables[table_index as usize]
                             .borrow_mut()
@@ -144,7 +152,8 @@ impl Instance {
                             .expect("element set out-of-bounds");
                     }
                 }
-                ElementKind::Passive(_) => (),
+                ElementKind::Passive => (),
+                ElementKind::Declared => (),
             }
         }
 

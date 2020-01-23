@@ -17,7 +17,7 @@ const STACK_LIMIT: u32 = 10;
 
 fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     let i = table.len().min(i as usize);
-    let it = table.clone().into_iter();
+    let it = table.into_iter();
     it.skip(i).next().expect("valid br_table entry")
 }
 
@@ -368,18 +368,19 @@ pub(crate) fn eval<'a>(
                     *stack.last_mut() = stack.pop();
                 }
             }
-            Operator::GetLocal { local_index } => stack.push(frame.get_local(*local_index).clone()),
-            Operator::SetLocal { local_index } => {
+            Operator::TypedSelect { .. } => op_notimpl!(),
+            Operator::LocalGet { local_index } => stack.push(frame.get_local(*local_index).clone()),
+            Operator::LocalSet { local_index } => {
                 *frame.get_local_mut(*local_index) = stack.pop();
             }
-            Operator::TeeLocal { local_index } => {
+            Operator::LocalTee { local_index } => {
                 *frame.get_local_mut(*local_index) = stack.last().clone();
             }
-            Operator::GetGlobal { global_index } => {
+            Operator::GlobalGet { global_index } => {
                 let g = frame.context().get_global(*global_index);
                 stack.push(g.borrow().content());
             }
-            Operator::SetGlobal { global_index } => {
+            Operator::GlobalSet { global_index } => {
                 let g = frame.context().get_global(*global_index);
                 g.borrow_mut().set_content(&stack.pop());
             }
@@ -473,24 +474,40 @@ pub(crate) fn eval<'a>(
             Operator::I32Eq => step!(|a:i32, b:i32| -> i32 if a == b { 1 } else { 0 }),
             Operator::I32Ne => step!(|a:i32, b:i32| -> i32 if a == b { 0 } else { 1 }),
             Operator::I32LtS => step!(|a:i32, b:i32| -> i32 if a < b { 1 } else { 0 }),
-            Operator::I32LtU => step!(|a:i32, b:i32| -> i32 if (a as u32) < b as u32 { 1 } else { 0 }),
+            Operator::I32LtU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) < b as u32 { 1 } else { 0 })
+            }
             Operator::I32GtS => step!(|a:i32, b:i32| -> i32 if a > b { 1 } else { 0 }),
-            Operator::I32GtU => step!(|a:i32, b:i32| -> i32 if (a as u32) > b as u32 { 1 } else { 0 }),
+            Operator::I32GtU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) > b as u32 { 1 } else { 0 })
+            }
             Operator::I32LeS => step!(|a:i32, b:i32| -> i32 if a <= b { 1 } else { 0 }),
-            Operator::I32LeU => step!(|a:i32, b:i32| -> i32 if (a as u32) <= b as u32 { 1 } else { 0 }),
+            Operator::I32LeU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) <= b as u32 { 1 } else { 0 })
+            }
             Operator::I32GeS => step!(|a:i32, b:i32| -> i32 if a >= b { 1 } else { 0 }),
-            Operator::I32GeU => step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 }),
+            Operator::I32GeU => {
+                step!(|a:i32, b:i32| -> i32 if (a as u32) >= b as u32 { 1 } else { 0 })
+            }
             Operator::I64Eqz => step!(|a:i64| -> i32 if a == 0 { 1 } else { 0 }),
             Operator::I64Eq => step!(|a:i64, b:i64| -> i32 if a == b { 1 } else { 0 }),
             Operator::I64Ne => step!(|a:i64, b:i64| -> i32 if a == b { 0 } else { 1 }),
             Operator::I64LtS => step!(|a:i64, b:i64| -> i32 if a < b { 1 } else { 0 }),
-            Operator::I64LtU => step!(|a:i64, b:i64| -> i32 if (a as u64) < b as u64 { 1 } else { 0 }),
+            Operator::I64LtU => {
+                step!(|a:i64, b:i64| -> i32 if (a as u64) < b as u64 { 1 } else { 0 })
+            }
             Operator::I64GtS => step!(|a:i64, b:i64| -> i32 if a > b { 1 } else { 0 }),
-            Operator::I64GtU => step!(|a:i64, b:i64| -> i32 if (a as u64) > b as u64 { 1 } else { 0 }),
+            Operator::I64GtU => {
+                step!(|a:i64, b:i64| -> i32 if (a as u64) > b as u64 { 1 } else { 0 })
+            }
             Operator::I64LeS => step!(|a:i64, b:i64| -> i32 if a <= b { 1 } else { 0 }),
-            Operator::I64LeU => step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 }),
+            Operator::I64LeU => {
+                step!(|a:i64, b:i64| -> i32 if (a as u64) <= b as u64 { 1 } else { 0 })
+            }
             Operator::I64GeS => step!(|a:i64, b:i64| -> i32 if a >= b { 1 } else { 0 }),
-            Operator::I64GeU => step!(|a:i64, b:i64| -> i32 if (a as u64) >= b as u64 { 1 } else { 0 }),
+            Operator::I64GeU => {
+                step!(|a:i64, b:i64| -> i32 if (a as u64) >= b as u64 { 1 } else { 0 })
+            }
             Operator::F32Eq => step!(|a:f32, b:f32| -> i32 floats::eq_f32(a, b)),
             Operator::F32Ne => step!(|a:f32, b:f32| -> i32 floats::ne_f32(a, b)),
             Operator::F32Lt => step!(|a:f32, b:f32| -> i32 floats::lt_f32(a, b)),
@@ -650,62 +667,62 @@ pub(crate) fn eval<'a>(
             Operator::F64Max => step!(|a:f64, b:f64| -> f64 floats::max_f64(a, b)),
             Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 floats::copysign_f64(a, b)),
             Operator::I32WrapI64 => step!(|a:i64| -> i32 a as i32),
-            Operator::I32TruncSF32 => step!(|a:f32| -> i32 match floats::f32_trunc_i32(a) {
+            Operator::I32TruncF32S => step!(|a:f32| -> i32 match floats::f32_trunc_i32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncUF32 => step!(|a:f32| -> i32 match floats::f32_trunc_u32(a) {
+            Operator::I32TruncF32U => step!(|a:f32| -> i32 match floats::f32_trunc_u32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncSF64 => step!(|a:f64| -> i32 match floats::f64_trunc_i32(a) {
+            Operator::I32TruncF64S => step!(|a:f64| -> i32 match floats::f64_trunc_i32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncUF64 => step!(|a:f64| -> i32 match floats::f64_trunc_u32(a) {
+            Operator::I32TruncF64U => step!(|a:f64| -> i32 match floats::f64_trunc_u32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64ExtendSI32 => step!(|a:i32| -> i64 (a as i64)),
-            Operator::I64ExtendUI32 => step!(|a:i32| -> i64 (a as u32 as i64)),
-            Operator::I64TruncSF32 => step!(|a:f32| -> i64 match floats::f32_trunc_i64(a) {
+            Operator::I64ExtendI32S => step!(|a:i32| -> i64 (a as i64)),
+            Operator::I64ExtendI32U => step!(|a:i32| -> i64 (a as u32 as i64)),
+            Operator::I64TruncF32S => step!(|a:f32| -> i64 match floats::f32_trunc_i64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncUF32 => step!(|a:f32| -> i64 match floats::f32_trunc_u64(a) {
+            Operator::I64TruncF32U => step!(|a:f32| -> i64 match floats::f32_trunc_u64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncSF64 => step!(|a:f64| -> i64 match floats::f64_trunc_i64(a) {
+            Operator::I64TruncF64S => step!(|a:f64| -> i64 match floats::f64_trunc_i64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncUF64 => step!(|a:f64| -> i64 match floats::f64_trunc_u64(a) {
+            Operator::I64TruncF64U => step!(|a:f64| -> i64 match floats::f64_trunc_u64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::F32ConvertSI32 => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
-            Operator::F32ConvertUI32 => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
-            Operator::F32ConvertSI64 => step!(|a:i64| -> f32 floats::i64_to_f32(a)),
-            Operator::F32ConvertUI64 => step!(|a:i64| -> f32 floats::u64_to_f32(a)),
+            Operator::F32ConvertI32S => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
+            Operator::F32ConvertI32U => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
+            Operator::F32ConvertI64S => step!(|a:i64| -> f32 floats::i64_to_f32(a)),
+            Operator::F32ConvertI64U => step!(|a:i64| -> f32 floats::u64_to_f32(a)),
             Operator::F32DemoteF64 => step!(|a:f64| -> f32 floats::f64_to_f32(a)),
-            Operator::F64ConvertSI32 => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
-            Operator::F64ConvertUI32 => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
-            Operator::F64ConvertSI64 => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
-            Operator::F64ConvertUI64 => step!(|a:i64| -> f64 floats::u64_to_f64(a)),
+            Operator::F64ConvertI32S => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
+            Operator::F64ConvertI32U => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
+            Operator::F64ConvertI64S => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
+            Operator::F64ConvertI64U => step!(|a:i64| -> f64 floats::u64_to_f64(a)),
             Operator::F64PromoteF32 => step!(|a:f32| -> f64 floats::f32_to_f64(a)),
             Operator::I32ReinterpretF32 => step!(|a:f32| -> i32 a as i32),
             Operator::I64ReinterpretF64 => step!(|a:f64| -> i64 a as i64),
             Operator::F32ReinterpretI32 => step!(|a:i32| -> f32 a as u32),
             Operator::F64ReinterpretI64 => step!(|a:i64| -> f64 a as u64),
-            Operator::I32TruncSSatF32
-            | Operator::I32TruncUSatF32
-            | Operator::I32TruncSSatF64
-            | Operator::I32TruncUSatF64
-            | Operator::I64TruncSSatF32
-            | Operator::I64TruncUSatF32
-            | Operator::I64TruncSSatF64
-            | Operator::I64TruncUSatF64
+            Operator::I32TruncSatF32S
+            | Operator::I32TruncSatF32U
+            | Operator::I32TruncSatF64S
+            | Operator::I32TruncSatF64U
+            | Operator::I64TruncSatF32S
+            | Operator::I64TruncSatF32U
+            | Operator::I64TruncSatF64S
+            | Operator::I64TruncSatF64U
             | Operator::I32Extend16S
             | Operator::I32Extend8S
             | Operator::I64Extend32S
@@ -730,55 +747,55 @@ pub(crate) fn eval<'a>(
             | Operator::I32AtomicRmwAnd { .. }
             | Operator::I32AtomicRmwOr { .. }
             | Operator::I32AtomicRmwXor { .. }
-            | Operator::I32AtomicRmw16UAdd { .. }
-            | Operator::I32AtomicRmw16USub { .. }
-            | Operator::I32AtomicRmw16UAnd { .. }
-            | Operator::I32AtomicRmw16UOr { .. }
-            | Operator::I32AtomicRmw16UXor { .. }
-            | Operator::I32AtomicRmw8UAdd { .. }
-            | Operator::I32AtomicRmw8USub { .. }
-            | Operator::I32AtomicRmw8UAnd { .. }
-            | Operator::I32AtomicRmw8UOr { .. }
-            | Operator::I32AtomicRmw8UXor { .. }
+            | Operator::I32AtomicRmw16AddU { .. }
+            | Operator::I32AtomicRmw16SubU { .. }
+            | Operator::I32AtomicRmw16AndU { .. }
+            | Operator::I32AtomicRmw16OrU { .. }
+            | Operator::I32AtomicRmw16XorU { .. }
+            | Operator::I32AtomicRmw8AddU { .. }
+            | Operator::I32AtomicRmw8SubU { .. }
+            | Operator::I32AtomicRmw8AndU { .. }
+            | Operator::I32AtomicRmw8OrU { .. }
+            | Operator::I32AtomicRmw8XorU { .. }
             | Operator::I64AtomicRmwAdd { .. }
             | Operator::I64AtomicRmwSub { .. }
             | Operator::I64AtomicRmwAnd { .. }
             | Operator::I64AtomicRmwOr { .. }
             | Operator::I64AtomicRmwXor { .. }
-            | Operator::I64AtomicRmw32UAdd { .. }
-            | Operator::I64AtomicRmw32USub { .. }
-            | Operator::I64AtomicRmw32UAnd { .. }
-            | Operator::I64AtomicRmw32UOr { .. }
-            | Operator::I64AtomicRmw32UXor { .. }
-            | Operator::I64AtomicRmw16UAdd { .. }
-            | Operator::I64AtomicRmw16USub { .. }
-            | Operator::I64AtomicRmw16UAnd { .. }
-            | Operator::I64AtomicRmw16UOr { .. }
-            | Operator::I64AtomicRmw16UXor { .. }
-            | Operator::I64AtomicRmw8UAdd { .. }
-            | Operator::I64AtomicRmw8USub { .. }
-            | Operator::I64AtomicRmw8UAnd { .. }
-            | Operator::I64AtomicRmw8UOr { .. }
-            | Operator::I64AtomicRmw8UXor { .. }
+            | Operator::I64AtomicRmw32AddU { .. }
+            | Operator::I64AtomicRmw32SubU { .. }
+            | Operator::I64AtomicRmw32AndU { .. }
+            | Operator::I64AtomicRmw32OrU { .. }
+            | Operator::I64AtomicRmw32XorU { .. }
+            | Operator::I64AtomicRmw16AddU { .. }
+            | Operator::I64AtomicRmw16SubU { .. }
+            | Operator::I64AtomicRmw16AndU { .. }
+            | Operator::I64AtomicRmw16OrU { .. }
+            | Operator::I64AtomicRmw16XorU { .. }
+            | Operator::I64AtomicRmw8AddU { .. }
+            | Operator::I64AtomicRmw8SubU { .. }
+            | Operator::I64AtomicRmw8AndU { .. }
+            | Operator::I64AtomicRmw8OrU { .. }
+            | Operator::I64AtomicRmw8XorU { .. }
             | Operator::I32AtomicRmwXchg { .. }
-            | Operator::I32AtomicRmw16UXchg { .. }
-            | Operator::I32AtomicRmw8UXchg { .. }
+            | Operator::I32AtomicRmw16XchgU { .. }
+            | Operator::I32AtomicRmw8XchgU { .. }
             | Operator::I32AtomicRmwCmpxchg { .. }
-            | Operator::I32AtomicRmw16UCmpxchg { .. }
-            | Operator::I32AtomicRmw8UCmpxchg { .. }
+            | Operator::I32AtomicRmw16CmpxchgU { .. }
+            | Operator::I32AtomicRmw8CmpxchgU { .. }
             | Operator::I64AtomicRmwXchg { .. }
-            | Operator::I64AtomicRmw32UXchg { .. }
-            | Operator::I64AtomicRmw16UXchg { .. }
-            | Operator::I64AtomicRmw8UXchg { .. }
+            | Operator::I64AtomicRmw32XchgU { .. }
+            | Operator::I64AtomicRmw16XchgU { .. }
+            | Operator::I64AtomicRmw8XchgU { .. }
             | Operator::I64AtomicRmwCmpxchg { .. }
-            | Operator::I64AtomicRmw32UCmpxchg { .. }
-            | Operator::I64AtomicRmw16UCmpxchg { .. }
-            | Operator::I64AtomicRmw8UCmpxchg { .. }
-            | Operator::Wake { .. }
-            | Operator::I32Wait { .. }
-            | Operator::I64Wait { .. } => op_notimpl!(),
-            Operator::Fence { ref flags } => op_notimpl!(),
-            Operator::RefNull | Operator::RefIsNull => op_notimpl!(),
+            | Operator::I64AtomicRmw32CmpxchgU { .. }
+            | Operator::I64AtomicRmw16CmpxchgU { .. }
+            | Operator::I64AtomicRmw8CmpxchgU { .. }
+            | Operator::AtomicNotify { .. }
+            | Operator::I32AtomicWait { .. }
+            | Operator::I64AtomicWait { .. } => op_notimpl!(),
+            Operator::AtomicFence { ref flags } => op_notimpl!(),
+            Operator::RefNull | Operator::RefIsNull | Operator::RefFunc { .. } => op_notimpl!(),
             Operator::V128Load { .. } | Operator::V128Store { .. } => op_notimpl!(),
             Operator::V128Const { .. }
             | Operator::I8x16Splat
@@ -883,19 +900,19 @@ pub(crate) fn eval<'a>(
             | Operator::F64x2Abs
             | Operator::F64x2Neg
             | Operator::F64x2Sqrt
-            | Operator::F32x4ConvertSI32x4
-            | Operator::F32x4ConvertUI32x4
-            | Operator::F64x2ConvertSI64x2
-            | Operator::F64x2ConvertUI64x2
+            | Operator::F32x4ConvertI32x4S
+            | Operator::F32x4ConvertI32x4U
+            | Operator::F64x2ConvertI64x2S
+            | Operator::F64x2ConvertI64x2U
             | Operator::V128Not
             | Operator::I8x16Neg
             | Operator::I16x8Neg
             | Operator::I32x4Neg
             | Operator::I64x2Neg
-            | Operator::I32x4TruncSF32x4Sat
-            | Operator::I32x4TruncUF32x4Sat
-            | Operator::I64x2TruncSF64x2Sat
-            | Operator::I64x2TruncUF64x2Sat
+            | Operator::I32x4TruncSatF32x4S
+            | Operator::I32x4TruncSatF32x4U
+            | Operator::I64x2TruncSatF64x2S
+            | Operator::I64x2TruncSatF64x2U
             | Operator::V128Bitselect
             | Operator::I8x16AnyTrue
             | Operator::I8x16AllTrue
@@ -919,20 +936,46 @@ pub(crate) fn eval<'a>(
             | Operator::I64x2ShrU
             | Operator::V8x16Swizzle => op_notimpl!(),
             Operator::V8x16Shuffle { ref lanes } => op_notimpl!(),
-            Operator::I8x16LoadSplat { .. }
-            | Operator::I16x8LoadSplat { .. }
-            | Operator::I32x4LoadSplat { .. }
-            | Operator::I64x2LoadSplat { .. } => op_notimpl!(),
+            Operator::V8x16LoadSplat { .. }
+            | Operator::V16x8LoadSplat { .. }
+            | Operator::V32x4LoadSplat { .. }
+            | Operator::V64x2LoadSplat { .. } => op_notimpl!(),
             Operator::MemoryCopy | Operator::MemoryFill => op_notimpl!(),
             Operator::MemoryInit { segment }
             | Operator::DataDrop { segment }
-            | Operator::TableInit { segment }
             | Operator::ElemDrop { segment } => op_notimpl!(),
-            Operator::TableCopy => op_notimpl!(),
+            Operator::TableInit { table, segment } => op_notimpl!(),
+            Operator::TableCopy {
+                dst_table,
+                src_table,
+            } => op_notimpl!(),
             Operator::TableGet { table }
             | Operator::TableSet { table }
             | Operator::TableGrow { table }
-            | Operator::TableSize { table } => op_notimpl!(),
+            | Operator::TableSize { table }
+            | Operator::TableFill { table } => op_notimpl!(),
+            Operator::V128AndNot
+            | Operator::I64x2Mul
+            | Operator::I8x16NarrowI16x8S
+            | Operator::I8x16NarrowI16x8U
+            | Operator::I16x8NarrowI32x4S
+            | Operator::I16x8NarrowI32x4U
+            | Operator::I16x8WidenLowI8x16S
+            | Operator::I16x8WidenHighI8x16S
+            | Operator::I16x8WidenLowI8x16U
+            | Operator::I16x8WidenHighI8x16U
+            | Operator::I32x4WidenLowI16x8S
+            | Operator::I32x4WidenHighI16x8S
+            | Operator::I32x4WidenLowI16x8U
+            | Operator::I32x4WidenHighI16x8U
+            | Operator::I16x8Load8x8S { .. }
+            | Operator::I16x8Load8x8U { .. }
+            | Operator::I32x4Load16x4S { .. }
+            | Operator::I32x4Load16x4U { .. }
+            | Operator::I64x2Load32x2S { .. }
+            | Operator::I64x2Load32x2U { .. }
+            | Operator::I8x16RoundingAverageU
+            | Operator::I16x8RoundingAverageU => op_notimpl!(),
         }
         i += 1;
     }
