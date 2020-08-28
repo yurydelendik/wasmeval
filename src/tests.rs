@@ -1,4 +1,4 @@
-use failure::Error;
+use anyhow::Error;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{read, read_dir};

@@ -1,10 +1,10 @@
-use failure::Error;
+use anyhow::{bail, Error};
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
-    Data, Element, Export, FuncType, FunctionBody, Global, Import, MemoryType, ModuleReader,
-    SectionCode, TableType,
+    Data, Element, Export, FuncType, FunctionBody, Global, Import, MemoryType, Parser, Payload,
+    TableType, TypeDef,
 };
 
 pub(crate) struct ModuleData {
@@ -27,9 +27,9 @@ pub struct Module {
 }
 
 fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
-    let mut reader = {
+    let it = {
         let buf = unsafe { &std::slice::from_raw_parts(buf.as_ptr(), buf.len()) };
-        ModuleReader::new(buf)?
+        Parser::new(0).parse_all(buf)
     };
     let mut types = None;
     let mut imports = None;
@@ -40,93 +40,54 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
     let mut elements = None;
     let mut globals = None;
     let mut func_types = None;
-    let mut func_bodies = None;
+    let mut func_bodies = vec![];
     let mut start_func = None;
-    while !reader.eof() {
-        let section = reader.read()?;
-        match section.code {
-            SectionCode::Type => {
+    for r in it {
+        let payload = r?;
+        match payload {
+            Payload::TypeSection(section) => {
                 types = Some(
                     section
-                        .get_type_section_reader()?
                         .into_iter()
+                        .map(|ty| match ty {
+                            Ok(TypeDef::Func(f)) => Ok(f),
+                            Err(e) => bail!("type error: {:?}", e),
+                            _ => {
+                                bail!("unsupported typedef");
+                            }
+                        })
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
-            SectionCode::Import => {
-                imports = Some(
-                    section
-                        .get_import_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::ImportSection(section) => {
+                imports = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Export => {
-                exports = Some(
-                    section
-                        .get_export_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::ExportSection(section) => {
+                exports = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Memory => {
-                memories = Some(
-                    section
-                        .get_memory_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::MemorySection(section) => {
+                memories = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Table => {
-                tables = Some(
-                    section
-                        .get_table_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::TableSection(section) => {
+                tables = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Global => {
-                globals = Some(
-                    section
-                        .get_global_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::GlobalSection(section) => {
+                globals = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Function => {
-                func_types = Some(
-                    section
-                        .get_function_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::FunctionSection(section) => {
+                func_types = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Code => {
-                func_bodies = Some(
-                    section
-                        .get_code_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::CodeSectionEntry(body) => {
+                func_bodies.push(body);
             }
-            SectionCode::Data => {
-                data = Some(
-                    section
-                        .get_data_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::DataSection(section) => {
+                data = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Element => {
-                elements = Some(
-                    section
-                        .get_element_section_reader()?
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+            Payload::ElementSection(section) => {
+                elements = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
             }
-            SectionCode::Start => {
-                start_func = Some(section.get_start_section_content()?);
+            Payload::StartSection { func, .. } => {
+                start_func = Some(func);
             }
             _ => (),
         }
@@ -140,7 +101,7 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
     let elements = elements.unwrap_or_else(|| vec![]).into_boxed_slice();
     let globals = globals.unwrap_or_else(|| vec![]).into_boxed_slice();
     let func_types = func_types.unwrap_or_else(|| vec![]).into_boxed_slice();
-    let func_bodies = func_bodies.unwrap_or_else(|| vec![]).into_boxed_slice();
+    let func_bodies = func_bodies.into_boxed_slice();
     Ok(ModuleData {
         buf,
         types,
@@ -173,7 +134,12 @@ impl Module {
             .borrow()
             .imports
             .iter()
-            .map(|e| (e.module.to_string(), e.field.to_string()))
+            .map(|e| {
+                (
+                    e.module.to_string(),
+                    e.field.expect("TODO module").to_string(),
+                )
+            })
             .collect::<Vec<_>>()
     }
 

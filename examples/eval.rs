@@ -1,4 +1,4 @@
-use failure::{bail, Error};
+use anyhow::{bail, Error};
 use std::env;
 use std::fs;
 use std::path::Path;

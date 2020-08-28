@@ -91,7 +91,8 @@ impl BytecodeCache {
                     control[j].2.push((i, relative_depth));
                 }
                 Operator::BrTable { ref table } => {
-                    for relative_depth in table.clone().into_iter() {
+                    for entry in table.targets() {
+                        let relative_depth = entry.unwrap().0;
                         let j = control.len() - 1 - relative_depth as usize;
                         control[j].2.push((i, relative_depth));
                     }

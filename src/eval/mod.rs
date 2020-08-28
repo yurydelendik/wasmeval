@@ -17,8 +17,12 @@ const STACK_LIMIT: u32 = 10;
 
 fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
     let i = table.len().min(i as usize);
-    let it = table.into_iter();
-    it.skip(i).next().expect("valid br_table entry")
+    let it = table.targets();
+    it.skip(i)
+        .next()
+        .expect("br_table entry")
+        .expect("valid br_table entry")
+        .0
 }
 
 struct EvalStack(Vec<Val>);
@@ -453,15 +457,11 @@ pub(crate) fn eval<'a>(
             Operator::I64Store32 { memarg } => {
                 store!(memarg; i64 as u32);
             }
-            Operator::MemorySize {
-                reserved: memory_index,
-            } => {
+            Operator::MemorySize { .. } => {
                 let current = frame.context().get_memory().borrow().current();
                 push!(current as i32; i32)
             }
-            Operator::MemoryGrow {
-                reserved: memory_index,
-            } => {
+            Operator::MemoryGrow { .. } => {
                 let delta = pop!(i32) as u32;
                 let current = frame.context().get_memory().borrow_mut().grow(delta);
                 push!(current as i32; i32)
@@ -791,11 +791,13 @@ pub(crate) fn eval<'a>(
             | Operator::I64AtomicRmw32CmpxchgU { .. }
             | Operator::I64AtomicRmw16CmpxchgU { .. }
             | Operator::I64AtomicRmw8CmpxchgU { .. }
-            | Operator::AtomicNotify { .. }
-            | Operator::I32AtomicWait { .. }
-            | Operator::I64AtomicWait { .. } => op_notimpl!(),
+            | Operator::MemoryAtomicNotify { .. }
+            | Operator::MemoryAtomicWait32 { .. }
+            | Operator::MemoryAtomicWait64 { .. } => op_notimpl!(),
             Operator::AtomicFence { ref flags } => op_notimpl!(),
-            Operator::RefNull | Operator::RefIsNull | Operator::RefFunc { .. } => op_notimpl!(),
+            Operator::RefNull { .. } | Operator::RefIsNull | Operator::RefFunc { .. } => {
+                op_notimpl!()
+            }
             Operator::V128Load { .. } | Operator::V128Store { .. } => op_notimpl!(),
             Operator::V128Const { .. }
             | Operator::I8x16Splat
@@ -881,7 +883,6 @@ pub(crate) fn eval<'a>(
             | Operator::I8x16Sub
             | Operator::I8x16SubSaturateS
             | Operator::I8x16SubSaturateU
-            | Operator::I8x16Mul
             | Operator::I16x8Add
             | Operator::I16x8AddSaturateS
             | Operator::I16x8AddSaturateU
@@ -902,17 +903,16 @@ pub(crate) fn eval<'a>(
             | Operator::F64x2Sqrt
             | Operator::F32x4ConvertI32x4S
             | Operator::F32x4ConvertI32x4U
-            | Operator::F64x2ConvertI64x2S
-            | Operator::F64x2ConvertI64x2U
             | Operator::V128Not
             | Operator::I8x16Neg
+            | Operator::I8x16Abs
             | Operator::I16x8Neg
+            | Operator::I16x8Abs
             | Operator::I32x4Neg
+            | Operator::I32x4Abs
             | Operator::I64x2Neg
             | Operator::I32x4TruncSatF32x4S
             | Operator::I32x4TruncSatF32x4U
-            | Operator::I64x2TruncSatF64x2S
-            | Operator::I64x2TruncSatF64x2U
             | Operator::V128Bitselect
             | Operator::I8x16AnyTrue
             | Operator::I8x16AllTrue
@@ -920,17 +920,30 @@ pub(crate) fn eval<'a>(
             | Operator::I16x8AllTrue
             | Operator::I32x4AnyTrue
             | Operator::I32x4AllTrue
-            | Operator::I64x2AnyTrue
-            | Operator::I64x2AllTrue
             | Operator::I8x16Shl
             | Operator::I8x16ShrS
             | Operator::I8x16ShrU
+            | Operator::I8x16Bitmask
+            | Operator::I8x16MinS
+            | Operator::I8x16MinU
+            | Operator::I8x16MaxS
+            | Operator::I8x16MaxU
             | Operator::I16x8Shl
             | Operator::I16x8ShrS
             | Operator::I16x8ShrU
+            | Operator::I16x8Bitmask
+            | Operator::I16x8MinS
+            | Operator::I16x8MinU
+            | Operator::I16x8MaxS
+            | Operator::I16x8MaxU
             | Operator::I32x4Shl
             | Operator::I32x4ShrS
             | Operator::I32x4ShrU
+            | Operator::I32x4Bitmask
+            | Operator::I32x4MinS
+            | Operator::I32x4MinU
+            | Operator::I32x4MaxS
+            | Operator::I32x4MaxU
             | Operator::I64x2Shl
             | Operator::I64x2ShrS
             | Operator::I64x2ShrU
@@ -940,8 +953,8 @@ pub(crate) fn eval<'a>(
             | Operator::V16x8LoadSplat { .. }
             | Operator::V32x4LoadSplat { .. }
             | Operator::V64x2LoadSplat { .. } => op_notimpl!(),
-            Operator::MemoryCopy | Operator::MemoryFill => op_notimpl!(),
-            Operator::MemoryInit { segment }
+            Operator::MemoryCopy { .. } | Operator::MemoryFill { .. } => op_notimpl!(),
+            Operator::MemoryInit { segment, .. }
             | Operator::DataDrop { segment }
             | Operator::ElemDrop { segment } => op_notimpl!(),
             Operator::TableInit { table, segment } => op_notimpl!(),
@@ -976,6 +989,7 @@ pub(crate) fn eval<'a>(
             | Operator::I64x2Load32x2U { .. }
             | Operator::I8x16RoundingAverageU
             | Operator::I16x8RoundingAverageU => op_notimpl!(),
+            Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => op_notimpl!(),
         }
         i += 1;
     }

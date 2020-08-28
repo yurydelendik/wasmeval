@@ -1,4 +1,4 @@
-use failure::{format_err, Error};
+use anyhow::{format_err, Error};
 use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
@@ -7,33 +7,30 @@ use std::rc::Rc;
 use wasmeval::{eval, EvalContext, Func, FuncType, Global, Memory, MemoryImmediate, Table, Val};
 
 fn read_gcd(data: &[u8]) -> Result<&[u8], Error> {
-    use wasmparser::{ExternalKind, ImportSectionEntryType, ModuleReader, SectionContent};
-
-    let mut reader = ModuleReader::new(data)?;
+    use wasmparser::{ExternalKind, ImportSectionEntryType, Parser, Payload};
 
     let gcd_body = {
         let mut import_count = 0;
         let mut gcd_body = None;
         let mut gcd_body_index = None;
-        while !reader.eof() {
-            match reader.read()?.content()? {
-                SectionContent::Import(reader) => {
+        let mut index = 0;
+        for p in Parser::new(0).parse_all(data) {
+            match p? {
+                Payload::ImportSection(reader) => {
                     for i in reader.into_iter() {
                         if let ImportSectionEntryType::Function(_) = i?.ty {
                             import_count += 1;
                         }
                     }
                 }
-                SectionContent::Code(reader) => {
-                    let index =
-                        gcd_body_index.ok_or_else(|| format_err!("gcd export not found"))?;
-                    gcd_body = reader
-                        .into_iter()
-                        .skip(index as usize - import_count)
-                        .next();
-                    break;
+                Payload::CodeSectionEntry(body) => {
+                    if Some(index + import_count) == gcd_body_index {
+                        gcd_body = Some(body);
+                        break;
+                    }
+                    index += 1;
                 }
-                SectionContent::Export(reader) => {
+                Payload::ExportSection(reader) => {
                     for e in reader.into_iter() {
                         if let wasmparser::Export {
                             field: "gcd",
@@ -52,7 +49,7 @@ fn read_gcd(data: &[u8]) -> Result<&[u8], Error> {
         gcd_body.ok_or_else(|| format_err!("gcd body not found"))?
     };
 
-    Ok(gcd_body?.range().slice(data))
+    Ok(gcd_body.range().slice(data))
 }
 
 struct Ctx {

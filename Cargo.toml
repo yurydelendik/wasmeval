@@ -1,6 +1,6 @@
 [package]
 name = "wasmeval"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Yury Delendik <ydelendik@mozilla.com>"]
 edition = "2018"
 
@@ -10,8 +10,8 @@ edition = "2018"
 debug = true
 
 [dependencies]
-wasmparser = "0.48.2"
-failure = "0.1.5"
+wasmparser = "0.62.0"
+anyhow = "1.0"
 
 [dev-dependencies]
 wabt = "0.9.2"

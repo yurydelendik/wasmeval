@@ -1,8 +1,8 @@
-use failure::{bail, format_err, Error};
+use anyhow::{bail, format_err, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmparser::{
-    DataKind, ElementItem, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr,
+    DataKind, ElementItem, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr, MemoryType,
 };
 
 use crate::eval::{eval_const, BytecodeCache, EvalSource};
@@ -68,6 +68,9 @@ impl Instance {
                         bail!("incompatible table import");
                     }
                 }
+                _ => {
+                    bail!("TODO unsupported");
+                }
             }
         }
         let data = Rc::new(RefCell::new(InstanceData {
@@ -79,7 +82,15 @@ impl Instance {
         }));
 
         for m in module_data.borrow().memories.iter() {
-            let limits = &m.limits;
+            let limits = match m {
+                MemoryType::M32 {
+                    ref limits,
+                    shared: false,
+                } => limits,
+                x => {
+                    bail!("unsupported memory type {:?}", x);
+                }
+            };
             let memory = InstanceMemory::new(
                 limits.initial as usize,
                 limits.maximum.unwrap_or(65535) as usize,
@@ -166,6 +177,9 @@ impl Instance {
                 ExternalKind::Memory => External::Memory(data.memories[index].clone()),
                 ExternalKind::Global => External::Global(data.globals[index].clone()),
                 ExternalKind::Table => External::Table(data.tables[index].clone()),
+                _ => {
+                    panic!("TODO");
+                }
             });
         }
 
