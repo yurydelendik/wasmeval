@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
-    Data, Element, Export, FuncType, FunctionBody, Global, Import, MemoryType, Parser, Payload,
-    TableType, TypeDef,
+    Data, Element, Export, FuncType, FunctionBody, Global, Import, ImportSectionEntryType,
+    MemoryType, Parser, Payload, TableType, TypeDef,
 };
 
 pub(crate) struct ModuleData {
@@ -52,15 +52,53 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
                         .map(|ty| match ty {
                             Ok(TypeDef::Func(f)) => Ok(f),
                             Err(e) => bail!("type error: {:?}", e),
-                            _ => {
-                                bail!("unsupported typedef");
-                            }
+                            _ => bail!("unsupported typedef"),
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 );
             }
             Payload::ImportSection(section) => {
-                imports = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
+                imports = Some(
+                    section
+                        .into_iter()
+                        .map(|i| match i {
+                            Ok(
+                                i
+                                @
+                                Import {
+                                    ty: ImportSectionEntryType::Function(_),
+                                    ..
+                                },
+                            )
+                            | Ok(
+                                i
+                                @
+                                Import {
+                                    ty: ImportSectionEntryType::Memory(_),
+                                    ..
+                                },
+                            )
+                            | Ok(
+                                i
+                                @
+                                Import {
+                                    ty: ImportSectionEntryType::Table(_),
+                                    ..
+                                },
+                            )
+                            | Ok(
+                                i
+                                @
+                                Import {
+                                    ty: ImportSectionEntryType::Global(_),
+                                    ..
+                                },
+                            ) => Ok(i),
+                            Err(e) => bail!("import error: {:?}", e),
+                            _ => bail!("unsupported import"),
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
             }
             Payload::ExportSection(section) => {
                 exports = Some(section.into_iter().collect::<Result<Vec<_>, _>>()?);
@@ -134,12 +172,7 @@ impl Module {
             .borrow()
             .imports
             .iter()
-            .map(|e| {
-                (
-                    e.module.to_string(),
-                    e.field.expect("TODO module").to_string(),
-                )
-            })
+            .map(|e| (e.module.to_string(), e.field.unwrap().to_string()))
             .collect::<Vec<_>>()
     }
 

@@ -68,9 +68,7 @@ impl Instance {
                         bail!("incompatible table import");
                     }
                 }
-                _ => {
-                    bail!("TODO unsupported");
-                }
+                i => unreachable!("unsupported: {:?}", i),
             }
         }
         let data = Rc::new(RefCell::new(InstanceData {
