@@ -722,12 +722,12 @@ pub(crate) fn eval<'a>(
             | Operator::I64TruncSatF32S
             | Operator::I64TruncSatF32U
             | Operator::I64TruncSatF64S
-            | Operator::I64TruncSatF64U
-            | Operator::I32Extend16S
-            | Operator::I32Extend8S
-            | Operator::I64Extend32S
-            | Operator::I64Extend16S
-            | Operator::I64Extend8S => op_notimpl!(),
+            | Operator::I64TruncSatF64U => op_notimpl!(),
+            Operator::I32Extend16S => step!(|a: i32| -> i32 (a as i16) as i32),
+            Operator::I32Extend8S => step!(|a: i32| -> i32 (a as i8) as i32),
+            Operator::I64Extend32S => step!(|a: i64| -> i64 a as i64),
+            Operator::I64Extend16S => step!(|a: i64| -> i64 (a as i16) as i64),
+            Operator::I64Extend8S => step!(|a: i64| -> i64 (a as i8) as i64),
             Operator::I32AtomicLoad { .. }
             | Operator::I32AtomicLoad16U { .. }
             | Operator::I32AtomicLoad8U { .. }

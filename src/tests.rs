@@ -3,25 +3,27 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{read, read_dir};
 use std::rc::Rc;
-use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
-use wabt::Features;
+use wast::{
+    parser::{self, ParseBuffer},
+    Expression, Id, NanPattern, WastDirective, Wat,
+};
 
 use crate::{External, Func, Instance, Module, Trap, Val};
 
-fn parse_module(module: ModuleBinary) -> Result<Module, Error> {
-    let bin = module.into_vec().into_boxed_slice();
+fn parse_module(module: Vec<u8>) -> Result<Module, Error> {
+    let bin = module.into_boxed_slice();
     let module = Module::new(bin)?;
     Ok(module)
 }
 
 fn instantiate_module<'b>(
     context: &'b Context,
-    module: ModuleBinary,
+    module: Vec<u8>,
 ) -> Result<(Instance, Module), Error> {
     let module = parse_module(module)?;
     let mut imports = Vec::new();
     for (module_name, field) in module.imports().into_iter() {
-        let (instance, m) = context.find_instance(Some(module_name));
+        let (instance, m) = context.find_instance_by_name(Some(&module_name));
         let (i, _) = m
             .exports()
             .into_iter()
@@ -34,15 +36,21 @@ fn instantiate_module<'b>(
     Ok((instance, module))
 }
 
-fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Value<f32, f64>>) -> Result<Box<[Val]>, Trap> {
+fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Expression>) -> Result<Box<[Val]>, Trap> {
+    use wast::Instruction;
     let args = args
         .into_iter()
-        .map(|a| match a {
-            Value::I32(i) => Val::I32(i),
-            Value::I64(i) => Val::I64(i),
-            Value::F32(f) => Val::F32(unsafe { std::mem::transmute(f) }),
-            Value::F64(f) => Val::F64(unsafe { std::mem::transmute(f) }),
-            _ => unimplemented!(),
+        .map(|a| {
+            if a.instrs.len() != 1 {
+                unimplemented!();
+            }
+            match &a.instrs[0] {
+                Instruction::I32Const(i) => Val::I32(*i),
+                Instruction::I64Const(i) => Val::I64(*i),
+                Instruction::F32Const(f) => Val::F32(f.bits),
+                Instruction::F64Const(f) => Val::F64(f.bits),
+                _ => unimplemented!(),
+            }
         })
         .collect::<Vec<_>>();
     let mut out = vec![Default::default(); f.borrow().results_arity()];
@@ -53,9 +61,10 @@ fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Value<f32, f64>>) -> Result<Box
 
 fn preform_action<'a, 'b>(
     context: &'b Context,
-    action: Action<f32, f64>,
+    exec: wast::WastExecute<'a>,
 ) -> Result<Box<[Val]>, Trap> {
-    let get_export = |module: Option<String>, field: String| -> Option<&External> {
+    use wast::{WastExecute::*, WastInvoke};
+    let get_export = |module: Option<Id>, field: &str| -> Option<&External> {
         let (instance, module) = context.find_instance(module);
         module
             .exports()
@@ -65,18 +74,16 @@ fn preform_action<'a, 'b>(
             .map(|(i, _)| &instance.exports()[i])
     };
 
-    match action {
-        Action::Invoke {
-            module,
-            field,
-            args,
-        } => {
-            let export = get_export(module, field).unwrap();
+    match exec {
+        Invoke(WastInvoke {
+            module, name, args, ..
+        }) => {
+            let export = get_export(module, name).unwrap();
             let f = export.func().unwrap().clone();
             call_func(f, args)
         }
-        Action::Get { module, field } => {
-            let result = get_export(module, field).unwrap();
+        Get { module, global } => {
+            let result = get_export(module, global).unwrap();
             match result {
                 External::Global(g) => {
                     let context = vec![g.borrow().content().clone()];
@@ -85,35 +92,43 @@ fn preform_action<'a, 'b>(
                 _ => unimplemented!("Action::Get result"),
             }
         }
+        Module(_) => unimplemented!(),
     }
 }
 
-fn assert_value(value: &Val, expected: &Value<f32, f64>) -> bool {
+fn assert_value(value: &Val, expected: &wast::AssertExpression) -> bool {
+    use wast::AssertExpression::*;
     match expected {
-        Value::I32(i) => {
+        I32(i) => {
             if let Val::I32(j) = value {
                 j == i
             } else {
                 false
             }
         }
-        Value::I64(i) => {
+        I64(i) => {
             if let Val::I64(j) = value {
                 j == i
             } else {
                 false
             }
         }
-        Value::F32(f) => {
+        F32(f) => {
             if let Val::F32(j) = value {
-                *j == unsafe { std::mem::transmute::<_, u32>(*f) }
+                match f {
+                    NanPattern::Value(f) => *j == f.bits,
+                    _ => unimplemented!(),
+                }
             } else {
                 false
             }
         }
-        Value::F64(f) => {
+        F64(f) => {
             if let Val::F64(j) = value {
-                *j == unsafe { std::mem::transmute::<_, u64>(*f) }
+                match f {
+                    NanPattern::Value(f) => *j == f.bits,
+                    _ => unimplemented!(),
+                }
             } else {
                 false
             }
@@ -138,34 +153,37 @@ impl Context {
             last: !0,
         }
     }
-    pub fn add_instance(&mut self, instance: Instance, module: Module, name: Option<String>) {
+    pub fn add_instance(&mut self, instance: Instance, module: Module) {
+        let module_name = module.name();
         let last = self.instances.len();
         self.instances.push((instance, module));
         self.last = last;
-        if let Some(name) = name {
+        if let Some(name) = module_name {
             self.aliases.insert(name, last);
         }
     }
-    pub fn find_instance<'b>(&'b self, name: Option<String>) -> &'b (Instance, Module) {
+    pub fn find_instance<'b>(&'b self, name: Option<Id>) -> &'b (Instance, Module) {
+        self.find_instance_by_name(name.map(|id| id.name()))
+    }
+    pub fn find_instance_by_name<'b>(&'b self, name: Option<&str>) -> &'b (Instance, Module) {
         if name.is_none() {
             return &self.instances[self.last];
         }
-        let name = name.as_ref().unwrap();
-        if let Some(index) = self.aliases.get(name) {
+        if let Some(index) = self.aliases.get(name.unwrap()) {
             &self.instances[*index]
         } else {
-            panic!("unable to resolve {} module", name,);
+            panic!("unable to resolve {} module", name.unwrap());
         }
     }
-    pub fn add_alias(&mut self, name: Option<String>, as_name: String) {
+    pub fn add_alias(&mut self, name: Option<Id>, as_name: String) {
         self.aliases.insert(
             as_name,
             match name {
                 Some(ref name) => {
-                    if let Some(index) = self.aliases.get(name) {
+                    if let Some(index) = self.aliases.get(name.name()) {
                         *index
                     } else {
-                        panic!("unable to resolve {} module", name,);
+                        panic!("unable to resolve {} module", name.name(),);
                     }
                 }
                 None => self.last,
@@ -199,41 +217,65 @@ fn create_spectest() -> (Instance, Module) {
     (instance, module)
 }
 
-fn run_wabt_scripts<F>(filename: &str, wast: &[u8], features: Features, skip_test: F)
+fn run_wabt_scripts<F>(filename: &str, wast: &[u8], skip_test: F) -> anyhow::Result<()>
 where
-    F: Fn(&str, u64) -> bool,
+    F: Fn(&str, usize) -> bool,
 {
     println!("Parsing {:?}", filename);
     // Check if we need to skip entire wast file test/parsing.
     if skip_test(filename, /* line = */ 0) {
         println!("{}: skipping", filename);
-        return;
+        return Ok(());
     }
 
-    let mut parser: ScriptParser<f32, f64> =
-        ScriptParser::from_source_and_name_with_features(wast, filename, features)
-            .expect("script parser");
+    let wast = std::str::from_utf8(wast).unwrap();
+
+    let adjust_wast = |mut err: wast::Error| {
+        err.set_path(filename.as_ref());
+        err.set_text(wast);
+        err
+    };
+
+    let buf = wast::parser::ParseBuffer::new(wast).map_err(adjust_wast)?;
+    let ast = wast::parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
 
     let mut context = Context::new();
-    while let Some(Command { kind, line }) = parser.next().expect("parser") {
+    for directive in ast.directives {
+        let sp = directive.span();
+        let (line, _col) = sp.linecol_in(wast);
         if skip_test(filename, line) {
             println!("{}:{}: skipping", filename, line);
             continue;
         }
         println!("line {}", line);
 
-        match kind {
-            CommandKind::Module { module, name } => {
-                let (instance, module) = instantiate_module(&context, module).expect("module");
-                context.add_instance(instance, module, name);
+        match directive {
+            WastDirective::Module(mut module) => {
+                let binary = module.encode()?;
+                let (instance, module) = instantiate_module(&context, binary).expect("module");
+                context.add_instance(instance, module);
             }
-            CommandKind::AssertUninstantiable { .. } | CommandKind::AssertUnlinkable { .. } => {
+            WastDirective::QuoteModule { source, .. } => {
+                let mut module = String::new();
+                for src in source {
+                    module.push_str(std::str::from_utf8(src)?);
+                    module.push_str(" ");
+                }
+                let buf = ParseBuffer::new(&module)?;
+                let mut wat = parser::parse::<Wat>(&buf)?;
+                let binary = wat.module.encode()?;
+
+                let (instance, module) = instantiate_module(&context, binary).expect("module");
+                context.add_instance(instance, module);
+            }
+            //WastDirective::AssertUninstantiable { .. } |
+            WastDirective::AssertUnlinkable { .. } => {
                 println!("{}:{}: skipping TODO!!!", filename, line);
                 // if let Err(err) = validate_module(module, ()) {
                 //     panic!("{}:{}: invalid module: {:?}", filename, line, err);
                 // }
             }
-            CommandKind::AssertInvalid { .. } | CommandKind::AssertMalformed { .. } => {
+            WastDirective::AssertInvalid { .. } | WastDirective::AssertMalformed { .. } => {
                 println!("{}:{}: skipping TODO!!!", filename, line);
                 // // TODO diffentiate between assert_invalid and assert_malformed
                 // if let Ok(_) = validate_module(module, ()) {
@@ -243,17 +285,18 @@ where
                 //     );
                 // }
             }
-            CommandKind::Register { name, as_name } => {
-                context.add_alias(name, as_name);
+            WastDirective::Register { module, name, .. } => {
+                context.add_alias(module, name.to_string());
             }
-            CommandKind::PerformAction(action) => {
-                let _result = preform_action(&context, action);
+            WastDirective::Invoke(i) => {
+                let _result = preform_action(&context, wast::WastExecute::Invoke(i));
             }
-            CommandKind::AssertReturn { action, expected } => {
-                let result = preform_action(&context, action);
+            WastDirective::AssertReturn { exec, results, .. } => {
+                let result = preform_action(&context, exec);
                 if let Err(trap) = result {
                     panic!("{}:{}: trap was found {:?}", filename, line, trap);
                 }
+                let expected = results;
                 let returns = result.ok().unwrap();
                 assert!(
                     returns.len() == expected.len(),
@@ -275,25 +318,26 @@ where
                     );
                 }
             }
-            CommandKind::AssertTrap { action, message } => {
-                let result = preform_action(&context, action);
+            WastDirective::AssertTrap { exec, message, .. } => {
+                let result = preform_action(&context, exec);
                 if let Ok(_) = result {
                     panic!("{}:{}: trap is expected: {}", filename, line, message);
                 }
                 let trap = result.err().unwrap();
                 let trap_message = trap.to_string();
-                if !trap_message.contains(message.as_str()) {
+                if !trap_message.contains(message) {
                     panic!(
                         "{}:{}: trap message {} ~= {}",
                         filename, line, message, trap_message
                     );
                 }
             }
-            CommandKind::AssertExhaustion { .. }
-            | CommandKind::AssertReturnCanonicalNan { .. }
-            | CommandKind::AssertReturnArithmeticNan { .. } => (),
+            WastDirective::AssertExhaustion { .. } => (),
+            //            | WastDirective::AssertReturnCanonicalNan { .. }
+            //            | WastDirective::AssertReturnArithmeticNan { .. } => (),
         }
     }
+    Ok(())
 }
 
 const SPEC_TESTS_PATH: &str = "testsuite";
@@ -308,54 +352,56 @@ fn run_spec_tests() {
             continue;
         }
 
-        let wabt_features = Features::new();
-
         let data = read(&dir.path()).expect("wast data");
         run_wabt_scripts(
             dir.file_name().to_str().expect("name"),
             &data,
-            wabt_features,
             //|_, _| false,
             |name, line| match (name, line) {
                 ("linking.wast", 387)
-                | ("linking.wast", 388)
+                | ("linking.wast", 386)
+                | ("linking.wast", 369)
                 | ("float_misc.wast", _)
                 | ("float_exprs.wast", _)
-                | ("i64.wast", _)
-                | ("i32.wast", _)
                 | ("f32.wast", _)
                 | ("f64.wast", _)
                 | ("conversions.wast", _)
-                | ("fac.wast", 107)
+                | ("i64.wast", 291)
+                | ("i64.wast", 292)
+                | ("i64.wast", 293)
+                | ("i64.wast", 294)
+                | ("fac.wast", 106)
                 | ("if.wast", 661)
                 | ("if.wast", 662)
                 | ("if.wast", 663)
-                | ("if.wast", 664)
-                | ("if.wast", 666)
+                | ("if.wast", 660)
+                | ("if.wast", 665)
                 | ("block.wast", 413)
                 | ("block.wast", 414)
-                | ("block.wast", 415)
+                | ("block.wast", 412)
+                | ("start.wast", 96)
                 // -0.0
                 // | ("f32.wast", 1621)
                 // | ("f64.wast", 1621)
                 // | ("f32.wast", 2020)
                 // | ("f64.wast", 2020)
                 // type mismatch
-                | ("call_indirect.wast", 499)
-                | ("call_indirect.wast", 509)
-                | ("call_indirect.wast", 516)
-                | ("call_indirect.wast", 523)
+                | ("call_indirect.wast", 498)
+                | ("call_indirect.wast", 508)
+                | ("call_indirect.wast", 515)
+                | ("call_indirect.wast", 522)
                 // stack "heavy"
+                | ("call.wast", 329)
                 | ("call.wast", 330)
-                | ("call.wast", 331)
+                | ("call.wast", 333)
                 | ("call.wast", 334)
-                | ("call.wast", 335)
+                | ("call_indirect.wast", 577)
                 | ("call_indirect.wast", 578)
-                | ("call_indirect.wast", 579)
-                | ("call_indirect.wast", 582)
-                | ("call_indirect.wast", 583) => true,
+                | ("call_indirect.wast", 581)
+                | ("call_indirect.wast", 582) => true,
                 _ => false,
             },
-        );
+        )
+        .expect("success");
     }
 }

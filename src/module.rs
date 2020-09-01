@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
     Data, Element, Export, FuncType, FunctionBody, Global, Import, ImportSectionEntryType,
-    MemoryType, Parser, Payload, TableType, TypeDef,
+    MemoryType, Name, NameSectionReader, Parser, Payload, TableType, TypeDef,
 };
 
 pub(crate) struct ModuleData {
@@ -20,6 +20,7 @@ pub(crate) struct ModuleData {
     pub func_types: Box<[u32]>,
     pub func_bodies: Box<[FunctionBody<'static>]>,
     pub start_func: Option<u32>,
+    pub module_name: Option<String>,
 }
 
 pub struct Module {
@@ -42,6 +43,7 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
     let mut func_types = None;
     let mut func_bodies = vec![];
     let mut start_func = None;
+    let mut module_name = None;
     for r in it {
         let payload = r?;
         match payload {
@@ -127,6 +129,23 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
             Payload::StartSection { func, .. } => {
                 start_func = Some(func);
             }
+            Payload::CustomSection {
+                name,
+                data,
+                data_offset,
+            } => {
+                if name == "name" {
+                    let mut iter = NameSectionReader::new(data, data_offset)?;
+                    while !iter.eof() {
+                        match iter.read()? {
+                            Name::Module(name) => {
+                                module_name = Some(name.get_name()?.to_string());
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+            }
             _ => (),
         }
     }
@@ -153,6 +172,7 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
         func_types,
         func_bodies,
         start_func,
+        module_name,
     })
 }
 
@@ -183,5 +203,9 @@ impl Module {
             .iter()
             .map(|e| e.field.to_string())
             .collect::<Vec<_>>()
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.data.borrow().module_name.clone()
     }
 }
