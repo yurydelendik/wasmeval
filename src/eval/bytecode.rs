@@ -12,12 +12,13 @@ pub(crate) struct BytecodeCache {
     elses: HashMap<usize, usize>,
     max_control_depth: usize,
     break_cache: HashMap<(usize, u32), BreakDestination>,
+    params: HashMap<usize, usize>,
 }
 
 #[derive(Debug, Clone)]
 pub enum BreakDestination {
     BlockEnd(usize, usize),
-    LoopStart(usize),
+    LoopStart(usize, usize),
 }
 
 fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
@@ -28,6 +29,18 @@ fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType)
         TypeOrFuncType::FuncType(index) => {
             let ty = context.get_type(*index);
             let len = ty.borrow().ty().returns.len();
+            len
+        }
+    }
+}
+
+fn get_params_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType) -> usize {
+    use wasmparser::TypeOrFuncType;
+    match ty {
+        TypeOrFuncType::Type(_) => 0,
+        TypeOrFuncType::FuncType(index) => {
+            let ty = context.get_type(*index);
+            let len = ty.borrow().ty().params.len();
             len
         }
     }
@@ -47,6 +60,7 @@ impl BytecodeCache {
         let mut elses = HashMap::new();
         let mut max_control_depth = 0;
         let mut break_cache = HashMap::new();
+        let mut params = HashMap::new();
 
         let mut control: Vec<(usize, Option<usize>, Vec<(usize, u32)>)> = Vec::new();
         for i in (0..operators.len()).rev() {
@@ -55,15 +69,18 @@ impl BytecodeCache {
                     control.push((i, None, Vec::new()));
                     max_control_depth = max_control_depth.max(control.len());
                 }
-                Operator::Loop { .. } => {
+                Operator::Loop { ref ty } => {
                     let (_, _, jumps) = control.pop().unwrap();
+                    let params_count = get_params_count(context, ty);
+                    params.insert(i, params_count);
                     for br in jumps {
-                        break_cache.insert(br, BreakDestination::LoopStart(i + 1));
+                        break_cache.insert(br, BreakDestination::LoopStart(i + 1, params_count));
                     }
                 }
                 Operator::Block { ref ty } => {
                     let (end, _, jumps) = control.pop().unwrap();
                     let returns_count = get_returns_count(context, ty);
+                    params.insert(i, get_params_count(context, ty));
                     for br in jumps {
                         break_cache.insert(br, BreakDestination::BlockEnd(end + 1, returns_count));
                     }
@@ -75,6 +92,7 @@ impl BytecodeCache {
                     } else {
                         elses.insert(i, end + 1);
                     }
+                    params.insert(i, get_params_count(context, ty));
                     let returns_count = get_returns_count(context, ty);
                     for br in jumps {
                         break_cache.insert(br, BreakDestination::BlockEnd(end + 1, returns_count));
@@ -114,6 +132,7 @@ impl BytecodeCache {
             elses,
             max_control_depth,
             break_cache,
+            params,
         }
     }
 
@@ -135,6 +154,10 @@ impl BytecodeCache {
 
     pub fn operators(&self) -> &[Operator] {
         &self.operators
+    }
+
+    pub fn block_params_count(&self, i: usize) -> usize {
+        self.params[&i].clone()
     }
 
     pub fn position(&self, i: usize) -> usize {

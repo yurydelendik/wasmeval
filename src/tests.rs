@@ -280,7 +280,6 @@ where
                 let (instance, module) = instantiate_module(&context, binary).expect("module");
                 context.add_instance(instance, module);
             }
-            //WastDirective::AssertUninstantiable { .. } |
             WastDirective::AssertUnlinkable { .. } => {
                 println!("{}:{}: skipping TODO!!!", filename, line);
                 // if let Err(err) = validate_module(module, ()) {
@@ -345,8 +344,6 @@ where
                 }
             }
             WastDirective::AssertExhaustion { .. } => (),
-            //            | WastDirective::AssertReturnCanonicalNan { .. }
-            //            | WastDirective::AssertReturnArithmeticNan { .. } => (),
         }
     }
     Ok(())
@@ -382,14 +379,6 @@ fn run_spec_tests() {
                 | ("i64.wast", 293)
                 | ("i64.wast", 294)
                 | ("fac.wast", 106)
-                | ("if.wast", 661)
-                | ("if.wast", 662)
-                | ("if.wast", 663)
-                | ("if.wast", 660)
-                | ("if.wast", 665)
-                | ("block.wast", 413)
-                | ("block.wast", 414)
-                | ("block.wast", 412)
                 // type mismatch
                 | ("call_indirect.wast", 498)
                 | ("call_indirect.wast", 508)

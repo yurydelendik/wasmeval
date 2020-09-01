@@ -25,6 +25,7 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
         .0
 }
 
+#[derive(Debug)]
 struct EvalStack(Vec<Val>);
 
 const DEFAULT_STACK_CAPACITY: usize = 100;
@@ -48,9 +49,6 @@ impl EvalStack {
     }
     pub fn push(&mut self, val: Val) {
         self.0.push(val);
-    }
-    pub fn truncate(&mut self, at: usize) {
-        self.0.truncate(at);
     }
     pub fn resize_with_default(&mut self, len: usize) {
         self.0.resize_with(len, Default::default);
@@ -248,11 +246,11 @@ pub(crate) fn eval<'a>(
                     block_returns.truncate(target_depth);
                     stack.remove_items(leave, stack.len() - tail_len - leave);
                 }
-                BreakDestination::LoopStart(start) => {
+                BreakDestination::LoopStart(start, tail_len) => {
                     i = start;
                     let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth + 1);
-                    stack.truncate(leave);
+                    stack.remove_items(leave, stack.len() - tail_len - leave);
                 }
             }
             continue;
@@ -305,11 +303,11 @@ pub(crate) fn eval<'a>(
             }
             Operator::Nop => (),
             Operator::Block { ty } | Operator::Loop { ty } => {
-                block_returns.push(stack.len());
+                block_returns.push(stack.len() - bytecode.block_params_count(i));
             }
             Operator::If { ty } => {
                 let c = pop!(i32);
-                block_returns.push(stack.len());
+                block_returns.push(stack.len() - bytecode.block_params_count(i));
                 if c == 0 {
                     i = bytecode.skip_to_else(i);
                     continue;
