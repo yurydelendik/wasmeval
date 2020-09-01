@@ -101,22 +101,28 @@ impl Trap {
     }
 }
 
-impl ToString for Trap {
-    fn to_string(&self) -> String {
-        match self.kind {
-            TrapKind::Unreachable => "unreachable".to_string(),
-            TrapKind::OutOfBounds => "out of bounds memory access".to_string(),
-            TrapKind::SignatureMismatch => "indirect call type mismatch".to_string(),
-            TrapKind::DivisionByZero => "integer divide by zero".to_string(),
-            TrapKind::Overflow => "integer overflow".to_string(),
-            TrapKind::InvalidIntegerConversion => "invalid conversion to integer".to_string(),
-            TrapKind::IntegerOverflow => "integer overflow".to_string(),
-            TrapKind::Uninitialized => "uninitialized element".to_string(),
-            TrapKind::UndefinedElement => "undefined element".to_string(),
-            TrapKind::User(ref msg) => format!("user trap: {}", msg),
-        }
+impl std::fmt::Display for Trap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self.kind {
+                TrapKind::Unreachable => "unreachable".to_string(),
+                TrapKind::OutOfBounds => "out of bounds memory access".to_string(),
+                TrapKind::SignatureMismatch => "indirect call type mismatch".to_string(),
+                TrapKind::DivisionByZero => "integer divide by zero".to_string(),
+                TrapKind::Overflow => "integer overflow".to_string(),
+                TrapKind::InvalidIntegerConversion => "invalid conversion to integer".to_string(),
+                TrapKind::IntegerOverflow => "integer overflow".to_string(),
+                TrapKind::Uninitialized => "uninitialized element".to_string(),
+                TrapKind::UndefinedElement => "undefined element".to_string(),
+                TrapKind::User(ref msg) => format!("user trap: {}", msg),
+            }
+        )
     }
 }
+
+impl std::error::Error for Trap {}
 
 pub fn get_default_value(ty: ValType) -> Val {
     match ty {

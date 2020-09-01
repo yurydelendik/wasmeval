@@ -1,4 +1,4 @@
-use anyhow::{bail, format_err, Error};
+use anyhow::{bail, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmparser::{
@@ -184,10 +184,7 @@ impl Instance {
         if let Some(start_func) = module_data.borrow().start_func {
             let f = data.borrow().funcs[start_func as usize].clone();
             debug_assert!(f.borrow().params_arity() == 0 && f.borrow().results_arity() == 0);
-            // TODO handle better start's trap
-            f.borrow()
-                .call(&[], &mut [])
-                .map_err(|_trap| format_err!("start function trapped"))?;
+            f.borrow().call(&[], &mut [])?;
         }
 
         Ok(Instance { data, exports })

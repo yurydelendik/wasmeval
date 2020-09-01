@@ -92,7 +92,13 @@ fn preform_action<'a, 'b>(
                 _ => unimplemented!("Action::Get result"),
             }
         }
-        Module(_) => unimplemented!(),
+        Module(mut module) => {
+            let binary = module.encode().expect("valid module");
+            match instantiate_module(&context, binary) {
+                Ok(_) => Ok(Box::new([])),
+                Err(e) => Err(e.downcast::<Trap>().unwrap()),
+            }
+        }
     }
 }
 
@@ -117,7 +123,12 @@ fn assert_value(value: &Val, expected: &wast::AssertExpression) -> bool {
             if let Val::F32(j) = value {
                 match f {
                     NanPattern::Value(f) => *j == f.bits,
-                    _ => unimplemented!(),
+                    NanPattern::ArithmeticNan => {
+                        (*j & 0x7f80_0000) == 0x7f80_0000 && (*j & 0x7f_ffff) >= 0x40_0000u32
+                    }
+                    NanPattern::CanonicalNan => {
+                        (*j & 0x7f80_0000) == 0x7f80_0000 && (*j & 0x7f_ffff) == 0x40_0000u32
+                    }
                 }
             } else {
                 false
@@ -127,7 +138,8 @@ fn assert_value(value: &Val, expected: &wast::AssertExpression) -> bool {
             if let Val::F64(j) = value {
                 match f {
                     NanPattern::Value(f) => *j == f.bits,
-                    _ => unimplemented!(),
+                    NanPattern::ArithmeticNan => (*j & 0xf_ffff_ffff_ffff) != 0,
+                    NanPattern::CanonicalNan => (*j & 0xf_ffff_ffff_ffff) == 0,
                 }
             } else {
                 false
@@ -360,12 +372,11 @@ fn run_spec_tests() {
             |name, line| match (name, line) {
                 ("linking.wast", 387)
                 | ("linking.wast", 386)
-                | ("linking.wast", 369)
                 | ("float_misc.wast", _)
                 | ("float_exprs.wast", _)
+                | ("conversions.wast", _)
                 | ("f32.wast", _)
                 | ("f64.wast", _)
-                | ("conversions.wast", _)
                 | ("i64.wast", 291)
                 | ("i64.wast", 292)
                 | ("i64.wast", 293)
@@ -379,12 +390,6 @@ fn run_spec_tests() {
                 | ("block.wast", 413)
                 | ("block.wast", 414)
                 | ("block.wast", 412)
-                | ("start.wast", 96)
-                // -0.0
-                // | ("f32.wast", 1621)
-                // | ("f64.wast", 1621)
-                // | ("f32.wast", 2020)
-                // | ("f64.wast", 2020)
                 // type mismatch
                 | ("call_indirect.wast", 498)
                 | ("call_indirect.wast", 508)
