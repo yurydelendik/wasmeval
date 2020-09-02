@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 pub use wasmparser::MemoryImmediate;
 
@@ -12,47 +11,43 @@ pub trait Func {
 
 pub trait Memory {
     fn current(&self) -> u32;
-    fn grow(&mut self, delta: u32) -> u32;
+    fn grow(&self, delta: u32) -> u32;
     fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *const u8;
-    fn content_ptr_mut(&mut self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *mut u8;
-    fn clone_from_slice(&mut self, offset: u32, chunk: &[u8]);
+    fn content_ptr_mut(&self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *mut u8;
+    fn clone_from_slice(&self, offset: u32, chunk: &[u8]);
 }
 
 pub trait Global {
     fn content(&self) -> Val;
-    fn set_content(&mut self, val: &Val);
+    fn set_content(&self, val: &Val);
 }
 
 #[derive(Debug)]
 pub struct TableOutOfBounds;
 
 pub trait Table {
-    fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds>;
+    fn get_func(&self, index: u32) -> Result<Option<Rc<dyn Func>>, TableOutOfBounds>;
     fn get_func_with_type(
         &self,
         index: u32,
         _type_index: u32,
-    ) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds> {
+    ) -> Result<Option<Rc<dyn Func>>, TableOutOfBounds> {
         // TODO really check type
         self.get_func(index)
     }
-    fn set_func(
-        &mut self,
-        index: u32,
-        f: Option<Rc<RefCell<dyn Func>>>,
-    ) -> Result<(), TableOutOfBounds>;
+    fn set_func(&self, index: u32, f: Option<Rc<dyn Func>>) -> Result<(), TableOutOfBounds>;
 }
 
 #[derive(Clone)]
 pub enum External {
-    Func(Rc<RefCell<dyn Func>>),
-    Memory(Rc<RefCell<dyn Memory>>),
-    Global(Rc<RefCell<dyn Global>>),
-    Table(Rc<RefCell<dyn Table>>),
+    Func(Rc<dyn Func>),
+    Memory(Rc<dyn Memory>),
+    Global(Rc<dyn Global>),
+    Table(Rc<dyn Table>),
 }
 
 impl<'a> External {
-    pub fn func(&self) -> Option<&Rc<RefCell<dyn Func>>> {
+    pub fn func(&self) -> Option<&Rc<dyn Func>> {
         if let External::Func(f) = self {
             Some(f)
         } else {
@@ -60,7 +55,7 @@ impl<'a> External {
         }
     }
 
-    pub fn memory(&self) -> Option<&Rc<RefCell<dyn Memory>>> {
+    pub fn memory(&self) -> Option<&Rc<dyn Memory>> {
         if let External::Memory(m) = self {
             Some(m)
         } else {
@@ -68,7 +63,7 @@ impl<'a> External {
         }
     }
 
-    pub fn table(&self) -> Option<&Rc<RefCell<dyn Table>>> {
+    pub fn table(&self) -> Option<&Rc<dyn Table>> {
         if let External::Table(t) = self {
             Some(t)
         } else {

@@ -29,7 +29,7 @@ fn main() -> Result<(), Error> {
     if let Some(fn_index) = fn_index {
         let f = &instance.exports()[fn_index];
         let mut result = vec![Default::default()];
-        if let Ok(()) = f.func().unwrap().borrow().call(&[], &mut result) {
+        if let Ok(()) = f.func().unwrap().call(&[], &mut result) {
             println!("{:?}", result);
             return Ok(());
         }

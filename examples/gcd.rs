@@ -19,7 +19,6 @@ fn main() -> Result<(), Error> {
     if let Ok(()) = gcd
         .func()
         .unwrap()
-        .borrow()
         .call(&[Val::I32(6), Val::I32(27)], &mut result)
     {
         println!("{:?}", result);

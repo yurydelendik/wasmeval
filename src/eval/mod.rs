@@ -1,5 +1,4 @@
 use crate::values::{Trap, TrapKind, Val};
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::slice;
 
@@ -104,7 +103,7 @@ pub(crate) fn eval<'a>(
             .unwrap_or_else(|| EvalStack::new())
     };
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
-    let mut memory_cache: Option<Rc<RefCell<_>>> = None;
+    let mut memory_cache: Option<Rc<_>> = None;
     block_returns.push(0);
 
     macro_rules! val_ty {
@@ -180,7 +179,6 @@ pub(crate) fn eval<'a>(
             let offset = pop!(i32) as u32;
             let ptr = frame.context()
                 .get_memory()
-                .borrow_mut()
                 .content_ptr($memarg, offset, val_size!($ty));
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
@@ -192,7 +190,6 @@ pub(crate) fn eval<'a>(
             let offset = pop!(i32) as u32;
             let ptr = frame.context()
                 .get_memory()
-                .borrow_mut()
                 .content_ptr($memarg, offset, std::mem::size_of::<$tt>() as u32);
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
@@ -210,9 +207,7 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident) => {{
             let val = pop!($ty);
             let offset = pop!(i32) as u32;
-            let ptr = memory!()
-                .borrow_mut()
-                .content_ptr_mut($memarg, offset, val_size!($ty));
+            let ptr = memory!().content_ptr_mut($memarg, offset, val_size!($ty));
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
             }
@@ -223,11 +218,7 @@ pub(crate) fn eval<'a>(
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let val = pop!($ty) as $tt;
             let offset = pop!(i32) as u32;
-            let ptr = memory!().borrow_mut().content_ptr_mut(
-                $memarg,
-                offset,
-                std::mem::size_of::<$tt>() as u32,
-            );
+            let ptr = memory!().content_ptr_mut($memarg, offset, std::mem::size_of::<$tt>() as u32);
             if ptr.is_null() {
                 trap!(TrapKind::OutOfBounds);
             }
@@ -259,8 +250,8 @@ pub(crate) fn eval<'a>(
     macro_rules! call {
         ($f:expr) => {{
             // TODO better signature check
-            let params_len = $f.borrow().params_arity();
-            let results_len = $f.borrow().results_arity();
+            let params_len = $f.params_arity();
+            let results_len = $f.results_arity();
             let top = stack.len();
             stack.resize_with_default(top + results_len);
             let params = if params_len > 0 {
@@ -273,7 +264,7 @@ pub(crate) fn eval<'a>(
             } else {
                 &mut []
             };
-            let result = $f.borrow().call(params, results);
+            let result = $f.call(params, results);
             match result {
                 Ok(()) => {
                     stack.remove_items(top - params_len, params_len);
@@ -346,14 +337,14 @@ pub(crate) fn eval<'a>(
                 let func_index = pop!(i32) as u32;
                 let table = frame.context().get_table(*table_index);
                 let ty = frame.context().get_type(*index);
-                let f = match table.borrow().get_func_with_type(func_index, *index) {
+                let f = match table.get_func_with_type(func_index, *index) {
                     Ok(Some(f)) => f,
                     Ok(None) => trap!(TrapKind::Uninitialized),
                     Err(_) => trap!(TrapKind::UndefinedElement),
                 };
                 // TODO detailed signature check
-                if f.borrow().params_arity() != ty.borrow().ty().params.len()
-                    || f.borrow().results_arity() != ty.borrow().ty().returns.len()
+                if f.params_arity() != ty.ty().params.len()
+                    || f.results_arity() != ty.ty().returns.len()
                 {
                     trap!(TrapKind::SignatureMismatch);
                 }
@@ -380,11 +371,11 @@ pub(crate) fn eval<'a>(
             }
             Operator::GlobalGet { global_index } => {
                 let g = frame.context().get_global(*global_index);
-                stack.push(g.borrow().content());
+                stack.push(g.content());
             }
             Operator::GlobalSet { global_index } => {
                 let g = frame.context().get_global(*global_index);
-                g.borrow_mut().set_content(&stack.pop());
+                g.set_content(&stack.pop());
             }
             Operator::I32Load { memarg } => {
                 load!(memarg; i32);
@@ -456,12 +447,12 @@ pub(crate) fn eval<'a>(
                 store!(memarg; i64 as u32);
             }
             Operator::MemorySize { .. } => {
-                let current = frame.context().get_memory().borrow().current();
+                let current = frame.context().get_memory().current();
                 push!(current as i32; i32)
             }
             Operator::MemoryGrow { .. } => {
                 let delta = pop!(i32) as u32;
-                let current = frame.context().get_memory().borrow_mut().grow(delta);
+                let current = frame.context().get_memory().grow(delta);
                 push!(current as i32; i32)
             }
             Operator::I32Const { value } => push!(*value; i32),

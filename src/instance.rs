@@ -1,6 +1,6 @@
 use anyhow::{bail, Error};
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use wasmparser::{
     DataKind, ElementItem, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr, MemoryType,
 };
@@ -15,30 +15,30 @@ use crate::table::InstanceTable;
 use crate::values::Val;
 
 pub(crate) struct InstanceData {
-    pub module_data: Rc<RefCell<ModuleData>>,
-    pub memories: Vec<Rc<RefCell<dyn Memory>>>,
-    pub globals: Vec<Rc<RefCell<dyn Global>>>,
-    pub funcs: Vec<Rc<RefCell<dyn Func>>>,
-    pub tables: Vec<Rc<RefCell<dyn Table>>>,
+    pub module_data: Rc<ModuleData>,
+    pub memories: Vec<Rc<dyn Memory>>,
+    pub globals: Vec<Rc<dyn Global>>,
+    pub funcs: Vec<Rc<dyn Func>>,
+    pub tables: Vec<Rc<dyn Table>>,
 }
 
 pub struct Instance {
     #[allow(dead_code)]
-    data: Rc<RefCell<InstanceData>>,
+    data: Rc<InstanceData>,
     exports: Vec<External>,
 }
 
 impl Instance {
     pub fn new(module: &Module, externals: &[External]) -> Result<Instance, Error> {
         let module_data = module.data();
-        if module_data.borrow().imports.len() != externals.len() {
+        if module_data.imports.len() != externals.len() {
             bail!("incompatible number of imports");
         }
         let mut memories = Vec::new();
         let mut funcs = Vec::new();
         let mut globals = Vec::new();
         let mut tables = Vec::new();
-        for (import, external) in module_data.borrow().imports.iter().zip(externals) {
+        for (import, external) in module_data.imports.iter().zip(externals) {
             match import.ty {
                 ImportSectionEntryType::Function(_sig) => {
                     if let External::Func(f) = external {
@@ -71,15 +71,8 @@ impl Instance {
                 i => unreachable!("unsupported: {:?}", i),
             }
         }
-        let data = Rc::new(RefCell::new(InstanceData {
-            module_data: module_data.clone(),
-            memories,
-            globals,
-            funcs,
-            tables,
-        }));
 
-        for m in module_data.borrow().memories.iter() {
+        for m in module_data.memories.iter() {
             let limits = match m {
                 MemoryType::M32 {
                     ref limits,
@@ -93,53 +86,59 @@ impl Instance {
                 limits.initial as usize,
                 limits.maximum.unwrap_or(65535) as usize,
             );
-            data.borrow_mut()
-                .memories
-                .push(Rc::new(RefCell::new(memory)));
+            memories.push(Rc::new(memory));
         }
-        for t in module_data.borrow().tables.iter() {
+        for t in module_data.tables.iter() {
             let limits = &t.limits;
             let table = InstanceTable::new(
                 limits.initial as usize,
                 limits.maximum.unwrap_or(0xffff_ffff) as usize,
             );
-            data.borrow_mut().tables.push(Rc::new(RefCell::new(table)));
-        }
-        for g in module_data.borrow().globals.iter() {
-            let init_val = eval_init_expr(&data, &g.init_expr);
-            let global = InstanceGlobal::new(init_val);
-            data.borrow_mut()
-                .globals
-                .push(Rc::new(RefCell::new(global)));
-        }
-        for i in 0..module_data.borrow().func_types.len() {
-            let f: InstanceFunction = InstanceFunction::new(data.clone(), i);
-            data.borrow_mut().funcs.push(Rc::new(RefCell::new(f)));
+            tables.push(Rc::new(table));
         }
 
-        for chunk in module_data.borrow().data.iter() {
+        let mut instance_data = Rc::new(InstanceData {
+            module_data: module_data.clone(),
+            memories: vec![],
+            globals,
+            funcs: vec![],
+            tables: vec![],
+        });
+        for g in module_data.globals.iter() {
+            let init_val = eval_init_expr(&instance_data, &g.init_expr);
+            let global = InstanceGlobal::new(init_val);
+            let data = Rc::get_mut(&mut instance_data).unwrap();
+            data.globals.push(Rc::new(global));
+        }
+
+        let source: Rc<RefCell<Weak<InstanceData>>> = Rc::new(RefCell::new(Weak::new()));
+
+        for i in 0..module_data.func_types.len() {
+            let f: InstanceFunction = InstanceFunction::new(Box::new(source.clone()), i);
+            funcs.push(Rc::new(f));
+        }
+
+        for chunk in module_data.data.iter() {
             match chunk.kind {
                 DataKind::Active {
                     memory_index,
                     ref init_expr,
                 } => {
-                    let start = eval_init_expr(&data, init_expr).i32().unwrap() as u32;
+                    let start = eval_init_expr(&instance_data, init_expr).i32().unwrap() as u32;
                     // TODO check boundaries
-                    data.borrow().memories[memory_index as usize]
-                        .borrow_mut()
-                        .clone_from_slice(start, chunk.data);
+                    memories[memory_index as usize].clone_from_slice(start, chunk.data);
                 }
                 DataKind::Passive => (),
             }
         }
 
-        for element in module_data.borrow().elements.iter() {
+        for element in module_data.elements.iter() {
             match element.kind {
                 ElementKind::Active {
                     table_index,
                     ref init_expr,
                 } => {
-                    let start = eval_init_expr(&data, init_expr).i32().unwrap() as u32;
+                    let start = eval_init_expr(&instance_data, init_expr).i32().unwrap() as u32;
                     for (i, item) in element
                         .items
                         .get_items_reader()
@@ -154,9 +153,8 @@ impl Instance {
                                 _ => None,
                             })
                             .expect("func_index");
-                        let f = data.borrow().funcs[index as usize].clone();
-                        data.borrow().tables[table_index as usize]
-                            .borrow_mut()
+                        let f = funcs[index as usize].clone();
+                        tables[table_index as usize]
                             .set_func(start + i as u32, Some(f))
                             .expect("element set out-of-bounds");
                     }
@@ -165,29 +163,42 @@ impl Instance {
                 ElementKind::Declared => (),
             }
         }
+        let globals = Rc::try_unwrap(instance_data).ok().unwrap().globals;
 
         let mut exports = Vec::new();
-        for export in module_data.borrow().exports.iter() {
+        for export in module_data.exports.iter() {
             let index = export.index as usize;
-            let data = data.borrow();
             exports.push(match export.kind {
-                ExternalKind::Function => External::Func(data.funcs[index].clone()),
-                ExternalKind::Memory => External::Memory(data.memories[index].clone()),
-                ExternalKind::Global => External::Global(data.globals[index].clone()),
-                ExternalKind::Table => External::Table(data.tables[index].clone()),
+                ExternalKind::Function => External::Func(funcs[index].clone()),
+                ExternalKind::Memory => External::Memory(memories[index].clone()),
+                ExternalKind::Global => External::Global(globals[index].clone()),
+                ExternalKind::Table => External::Table(tables[index].clone()),
                 _ => {
                     panic!("TODO");
                 }
             });
         }
 
-        if let Some(start_func) = module_data.borrow().start_func {
-            let f = data.borrow().funcs[start_func as usize].clone();
-            debug_assert!(f.borrow().params_arity() == 0 && f.borrow().results_arity() == 0);
-            f.borrow().call(&[], &mut [])?;
+        let instance_data = Rc::new(InstanceData {
+            module_data: module_data.clone(),
+            memories,
+            globals,
+            funcs,
+            tables,
+        });
+        *source.borrow_mut() = Rc::downgrade(&instance_data);
+
+        // Call start
+        if let Some(start_func) = module_data.start_func {
+            let f = instance_data.funcs[start_func as usize].clone();
+            debug_assert!(f.params_arity() == 0 && f.results_arity() == 0);
+            f.call(&[], &mut [])?;
         }
 
-        Ok(Instance { data, exports })
+        Ok(Instance {
+            data: instance_data,
+            exports,
+        })
     }
 
     pub fn exports(&self) -> &[External] {
@@ -195,7 +206,7 @@ impl Instance {
     }
 }
 
-fn eval_init_expr(data: &Rc<RefCell<InstanceData>>, init_expr: &InitExpr<'static>) -> Val {
+fn eval_init_expr(data: &Rc<InstanceData>, init_expr: &InitExpr<'static>) -> Val {
     struct S(BytecodeCache);
     impl EvalSource for S {
         fn bytecode(&self) -> &BytecodeCache {

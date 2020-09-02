@@ -1,5 +1,5 @@
-use std::cell::{Ref, RefCell};
-use std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 
 use crate::eval::BytecodeCache;
 use crate::eval::{eval, EvalContext, EvalSource, Frame};
@@ -8,16 +8,29 @@ use crate::instance::InstanceData;
 use crate::module::ModuleData;
 use crate::values::{get_default_value, Trap, Val};
 
+pub(crate) trait InstanceFunctionSource {
+    fn instance_data(&self) -> Rc<InstanceData>;
+}
+
+impl InstanceFunctionSource for Rc<RefCell<Weak<InstanceData>>> {
+    fn instance_data(&self) -> Rc<InstanceData> {
+        self.borrow().upgrade().unwrap()
+    }
+}
+
 pub(crate) struct InstanceFunction {
-    instance_data: Rc<RefCell<InstanceData>>,
+    source: Box<dyn InstanceFunctionSource>,
     defined_index: usize,
     cache: RefCell<Option<InstanceFunctionBody>>,
 }
 
 impl InstanceFunction {
-    pub(crate) fn new(data: Rc<RefCell<InstanceData>>, defined_index: usize) -> InstanceFunction {
+    pub(crate) fn new(
+        source: Box<dyn InstanceFunctionSource>,
+        defined_index: usize,
+    ) -> InstanceFunction {
         InstanceFunction {
-            instance_data: data,
+            source,
             defined_index,
             cache: RefCell::new(None),
         }
@@ -25,7 +38,7 @@ impl InstanceFunction {
 }
 
 struct InstanceFunctionBody {
-    _module_data: Rc<RefCell<ModuleData>>,
+    _module_data: Rc<ModuleData>,
     bytecode: BytecodeCache,
     locals: Vec<(u32, Val)>,
     frame_size: usize,
@@ -33,7 +46,7 @@ struct InstanceFunctionBody {
 
 impl InstanceFunctionBody {
     pub fn new(
-        module_data: Rc<RefCell<ModuleData>>,
+        module_data: Rc<ModuleData>,
         body: &wasmparser::FunctionBody<'static>,
         params_arity: usize,
         results_arity: usize,
@@ -80,49 +93,46 @@ impl EvalSource for InstanceFunctionBody {
     }
 }
 
+impl InstanceFunction {
+    fn instance_data(&self) -> Rc<InstanceData> {
+        self.source.instance_data()
+    }
+}
+
 impl Func for InstanceFunction {
     fn params_arity(&self) -> usize {
-        let module_data = Ref::map(self.instance_data.borrow(), |data| {
-            data.module_data.as_ref()
-        });
-        let func_type = module_data.borrow().func_types[self.defined_index];
-        let func_type: Ref<wasmparser::FuncType> =
-            Ref::map(module_data.borrow(), |data| &data.types[func_type as usize]);
+        let instance_data = self.instance_data();
+        let module_data = &instance_data.module_data;
+        let func_type = module_data.func_types[self.defined_index];
+        let func_type = &module_data.types[func_type as usize];
         func_type.params.len()
     }
 
     fn results_arity(&self) -> usize {
-        let module_data = Ref::map(self.instance_data.borrow(), |data| {
-            data.module_data.as_ref()
-        });
-        let func_type = module_data.borrow().func_types[self.defined_index];
-        let func_type: Ref<wasmparser::FuncType> =
-            Ref::map(module_data.borrow(), |data| &data.types[func_type as usize]);
+        let instance_data = self.instance_data();
+        let module_data = &instance_data.module_data;
+        let func_type = module_data.func_types[self.defined_index];
+        let func_type = &module_data.types[func_type as usize];
         func_type.returns.len()
     }
 
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         debug_assert!(self.results_arity() == results.len());
+        let instance_data = self.instance_data();
         if self.cache.borrow().is_none() {
-            let module_data = self.instance_data.borrow().module_data.clone();
-            let body = Ref::map(module_data.borrow(), |data| {
-                &data.func_bodies[self.defined_index]
-            });
-            let module_data = self.instance_data.borrow().module_data.clone();
+            let module_data = &instance_data.module_data;
+            let body = &module_data.func_bodies[self.defined_index];
             let body = InstanceFunctionBody::new(
-                module_data,
+                module_data.clone(),
                 &body,
                 self.params_arity(),
                 self.results_arity(),
-                &self.instance_data,
+                &instance_data,
             );
             *self.cache.borrow_mut() = Some(body);
         }
         let body = self.cache.borrow();
-        let mut frame = body
-            .as_ref()
-            .unwrap()
-            .create_frame(&self.instance_data, params);
+        let mut frame = body.as_ref().unwrap().create_frame(&instance_data, params);
         eval(&mut frame, body.as_ref().unwrap(), results)
     }
 }

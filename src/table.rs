@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct InstanceTable {
-    entries: Vec<Option<Rc<RefCell<dyn Func>>>>,
+    entries: RefCell<Vec<Option<Rc<dyn Func>>>>,
     #[allow(dead_code)]
     max: usize,
 }
@@ -11,28 +11,24 @@ pub struct InstanceTable {
 impl InstanceTable {
     pub fn new(min: usize, max: usize) -> InstanceTable {
         InstanceTable {
-            entries: vec![None; min],
+            entries: RefCell::new(vec![None; min]),
             max,
         }
     }
 }
 
 impl Table for InstanceTable {
-    fn get_func(&self, index: u32) -> Result<Option<Rc<RefCell<dyn Func>>>, TableOutOfBounds> {
-        if (index as usize) < self.entries.len() {
-            Ok(self.entries[index as usize].clone())
+    fn get_func(&self, index: u32) -> Result<Option<Rc<dyn Func>>, TableOutOfBounds> {
+        if (index as usize) < self.entries.borrow().len() {
+            Ok(self.entries.borrow()[index as usize].clone())
         } else {
             Err(TableOutOfBounds)
         }
     }
 
-    fn set_func(
-        &mut self,
-        index: u32,
-        f: Option<Rc<RefCell<dyn Func>>>,
-    ) -> Result<(), TableOutOfBounds> {
-        if (index as usize) < self.entries.len() {
-            self.entries[index as usize] = f;
+    fn set_func(&self, index: u32, f: Option<Rc<dyn Func>>) -> Result<(), TableOutOfBounds> {
+        if (index as usize) < self.entries.borrow().len() {
+            self.entries.borrow_mut()[index as usize] = f;
             Ok(())
         } else {
             Err(TableOutOfBounds)

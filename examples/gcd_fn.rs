@@ -53,69 +53,64 @@ fn read_gcd(data: &[u8]) -> Result<&[u8], Error> {
 }
 
 struct Ctx {
-    global: Rc<RefCell<dyn Global>>,
-    memory: Rc<RefCell<dyn Memory>>,
+    global: Rc<dyn Global>,
+    memory: Rc<dyn Memory>,
 }
 
 impl Ctx {
     pub fn new() -> Self {
-        struct G(Val);
+        struct G(RefCell<Val>);
         impl Global for G {
             fn content(&self) -> Val {
-                self.0.clone()
+                self.0.borrow().clone()
             }
-            fn set_content(&mut self, val: &Val) {
-                self.0 = val.clone();
+            fn set_content(&self, val: &Val) {
+                *self.0.borrow_mut() = val.clone();
             }
         }
         #[inline]
         fn combine_offsets(memarg: &MemoryImmediate, offset: u32) -> usize {
             memarg.offset as usize + offset as usize
         }
-        struct M(Vec<u8>);
+        struct M(RefCell<Vec<u8>>);
         impl Memory for M {
             fn current(&self) -> u32 {
                 1
             }
-            fn grow(&mut self, _delta: u32) -> u32 {
+            fn grow(&self, _delta: u32) -> u32 {
                 panic!("M grow");
             }
             fn content_ptr(&self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *const u8 {
                 let offset = combine_offsets(memarg, offset);
-                if offset + size as usize > self.0.len() {
+                if offset + size as usize > self.0.borrow().len() {
                     return std::ptr::null();
                 }
-                &self.0[offset]
+                &self.0.borrow()[offset]
             }
-            fn content_ptr_mut(
-                &mut self,
-                memarg: &MemoryImmediate,
-                offset: u32,
-                size: u32,
-            ) -> *mut u8 {
+            fn content_ptr_mut(&self, memarg: &MemoryImmediate, offset: u32, size: u32) -> *mut u8 {
                 let offset = combine_offsets(memarg, offset);
-                if offset + size as usize > self.0.len() {
+                if offset + size as usize > self.0.borrow().len() {
                     return std::ptr::null_mut();
                 }
-                &mut self.0[offset]
+                &mut self.0.borrow_mut()[offset]
             }
-            fn clone_from_slice(&mut self, offset: u32, chunk: &[u8]) {
+            fn clone_from_slice(&self, offset: u32, chunk: &[u8]) {
                 let offset = offset as usize;
-                self.0[offset..(offset + chunk.len())].clone_from_slice(chunk);
+                self.0.borrow_mut()[offset..(offset + chunk.len())].clone_from_slice(chunk);
             }
         }
         Self {
-            global: Rc::new(RefCell::new(G(Val::I32(65336)))),
-            memory: Rc::new(RefCell::new(M(vec![0u8; 65336]))),
+            global: Rc::new(G(RefCell::new(Val::I32(65336)))),
+            memory: Rc::new(M(RefCell::new(vec![0u8; 65336]))),
         }
     }
 }
 
 impl EvalContext for Ctx {
-    fn get_function(&self, index: u32) -> Rc<RefCell<dyn Func>> {
+    fn get_function(&self, index: u32) -> Rc<dyn Func> {
         panic!("func {}", index);
     }
-    fn get_global(&self, index: u32) -> Rc<RefCell<dyn Global>> {
+    fn get_global(&self, index: u32) -> Rc<dyn Global> {
         match index {
             0 => self.global.clone(),
             _ => {
@@ -123,13 +118,13 @@ impl EvalContext for Ctx {
             }
         }
     }
-    fn get_memory(&self) -> Rc<RefCell<dyn Memory>> {
+    fn get_memory(&self) -> Rc<dyn Memory> {
         self.memory.clone()
     }
-    fn get_table(&self, index: u32) -> Rc<RefCell<dyn Table>> {
+    fn get_table(&self, index: u32) -> Rc<dyn Table> {
         panic!("table {}", index);
     }
-    fn get_type(&self, index: u32) -> Rc<RefCell<dyn FuncType>> {
+    fn get_type(&self, index: u32) -> Rc<dyn FuncType> {
         panic!("type {}", index);
     }
 }

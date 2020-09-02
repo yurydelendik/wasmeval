@@ -1,4 +1,3 @@
-use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use crate::externals::{Func, Global, Memory, Table};
@@ -7,44 +6,41 @@ use crate::module::ModuleData;
 use crate::values::Val;
 
 pub trait EvalContext {
-    fn get_function(&self, index: u32) -> Rc<RefCell<dyn Func>>;
-    fn get_global(&self, index: u32) -> Rc<RefCell<dyn Global>>;
-    fn get_memory(&self) -> Rc<RefCell<dyn Memory>>;
-    fn get_table(&self, index: u32) -> Rc<RefCell<dyn Table>>;
-    fn get_type(&self, index: u32) -> Rc<RefCell<dyn FuncType>>;
+    fn get_function(&self, index: u32) -> Rc<dyn Func>;
+    fn get_global(&self, index: u32) -> Rc<dyn Global>;
+    fn get_memory(&self) -> Rc<dyn Memory>;
+    fn get_table(&self, index: u32) -> Rc<dyn Table>;
+    fn get_type(&self, index: u32) -> Rc<dyn FuncType>;
 }
 
-impl EvalContext for Rc<RefCell<InstanceData>> {
-    fn get_function(&self, index: u32) -> Rc<RefCell<dyn Func>> {
-        self.borrow().funcs[index as usize].clone()
+impl EvalContext for Rc<InstanceData> {
+    fn get_function(&self, index: u32) -> Rc<dyn Func> {
+        self.funcs[index as usize].clone()
     }
-    fn get_global(&self, index: u32) -> Rc<RefCell<dyn Global>> {
-        self.borrow().globals[index as usize].clone()
+    fn get_global(&self, index: u32) -> Rc<dyn Global> {
+        self.globals[index as usize].clone()
     }
-    fn get_memory(&self) -> Rc<RefCell<dyn Memory>> {
+    fn get_memory(&self) -> Rc<dyn Memory> {
         const INDEX: usize = 0;
-        self.borrow().memories[INDEX].clone()
+        self.memories[INDEX].clone()
     }
-    fn get_table(&self, index: u32) -> Rc<RefCell<dyn Table>> {
-        self.borrow().tables[index as usize].clone()
+    fn get_table(&self, index: u32) -> Rc<dyn Table> {
+        self.tables[index as usize].clone()
     }
-    fn get_type(&self, index: u32) -> Rc<RefCell<dyn FuncType>> {
-        Rc::new(RefCell::new(ModuleFuncType(
-            self.borrow().module_data.clone(),
-            index as usize,
-        )))
+    fn get_type(&self, index: u32) -> Rc<dyn FuncType> {
+        Rc::new(ModuleFuncType(self.module_data.clone(), index as usize))
     }
 }
 
 pub trait FuncType {
-    fn ty(&self) -> Ref<wasmparser::FuncType>;
+    fn ty(&self) -> &wasmparser::FuncType;
 }
 
-struct ModuleFuncType(Rc<RefCell<ModuleData>>, usize);
+struct ModuleFuncType(Rc<ModuleData>, usize);
 
 impl FuncType for ModuleFuncType {
-    fn ty(&self) -> Ref<wasmparser::FuncType> {
-        Ref::map(self.0.borrow(), |m| &m.types[self.1])
+    fn ty(&self) -> &wasmparser::FuncType {
+        &self.0.types[self.1]
     }
 }
 

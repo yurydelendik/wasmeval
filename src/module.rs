@@ -1,5 +1,4 @@
 use anyhow::{bail, Error};
-use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
@@ -24,7 +23,7 @@ pub(crate) struct ModuleData {
 }
 
 pub struct Module {
-    data: Rc<RefCell<ModuleData>>,
+    data: Rc<ModuleData>,
 }
 
 fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
@@ -179,17 +178,16 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
 impl Module {
     pub fn new(buf: Box<[u8]>) -> Result<Module, Error> {
         Ok(Module {
-            data: Rc::new(RefCell::new(read_module_data(Pin::new(buf))?)),
+            data: Rc::new(read_module_data(Pin::new(buf))?),
         })
     }
 
-    pub(crate) fn data(&self) -> &Rc<RefCell<ModuleData>> {
+    pub(crate) fn data(&self) -> &Rc<ModuleData> {
         &self.data
     }
 
     pub fn imports(&self) -> Vec<(String, String)> {
         self.data
-            .borrow()
             .imports
             .iter()
             .map(|e| (e.module.to_string(), e.field.unwrap().to_string()))
@@ -198,7 +196,6 @@ impl Module {
 
     pub fn exports(&self) -> Vec<String> {
         self.data
-            .borrow()
             .exports
             .iter()
             .map(|e| e.field.to_string())
@@ -206,6 +203,6 @@ impl Module {
     }
 
     pub fn name(&self) -> Option<String> {
-        self.data.borrow().module_name.clone()
+        self.data.module_name.clone()
     }
 }

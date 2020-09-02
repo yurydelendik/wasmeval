@@ -1,5 +1,4 @@
 use anyhow::Error;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{read, read_dir};
 use std::rc::Rc;
@@ -36,7 +35,7 @@ fn instantiate_module<'b>(
     Ok((instance, module))
 }
 
-fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Expression>) -> Result<Box<[Val]>, Trap> {
+fn call_func(f: Rc<dyn Func>, args: Vec<Expression>) -> Result<Box<[Val]>, Trap> {
     use wast::Instruction;
     let args = args
         .into_iter()
@@ -53,9 +52,8 @@ fn call_func(f: Rc<RefCell<dyn Func>>, args: Vec<Expression>) -> Result<Box<[Val
             }
         })
         .collect::<Vec<_>>();
-    let mut out = vec![Default::default(); f.borrow().results_arity()];
-    f.borrow()
-        .call(&args, &mut out)
+    let mut out = vec![Default::default(); f.results_arity()];
+    f.call(&args, &mut out)
         .map(move |()| out.into_boxed_slice())
 }
 
@@ -86,7 +84,7 @@ fn preform_action<'a, 'b>(
             let result = get_export(module, global).unwrap();
             match result {
                 External::Global(g) => {
-                    let context = vec![g.borrow().content().clone()];
+                    let context = vec![g.content().clone()];
                     Ok(context.into_boxed_slice())
                 }
                 _ => unimplemented!("Action::Get result"),

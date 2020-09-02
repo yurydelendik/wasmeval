@@ -28,7 +28,7 @@ fn get_returns_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType)
         TypeOrFuncType::Type(_) => 1,
         TypeOrFuncType::FuncType(index) => {
             let ty = context.get_type(*index);
-            let len = ty.borrow().ty().returns.len();
+            let len = ty.ty().returns.len();
             len
         }
     }
@@ -40,7 +40,7 @@ fn get_params_count(context: &dyn EvalContext, ty: &wasmparser::TypeOrFuncType) 
         TypeOrFuncType::Type(_) => 0,
         TypeOrFuncType::FuncType(index) => {
             let ty = context.get_type(*index);
-            let len = ty.borrow().ty().params.len();
+            let len = ty.ty().params.len();
             len
         }
     }
