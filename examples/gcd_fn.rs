@@ -135,7 +135,7 @@ fn main() -> Result<(), Error> {
     let params = vec![Val::I32(24), Val::I32(18)];
     let mut returns = vec![Val::I32(0)];
     let ctx = Ctx::new();
-    eval(&ctx, &params, &mut returns, gcd_data).map_err(|_| format_err!("gcd failed"))?;
+    eval(&ctx, &params, &mut returns, gcd_data, 100).map_err(|_| format_err!("gcd failed"))?;
     println!("{:?}", returns);
     Ok(())
 }

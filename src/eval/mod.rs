@@ -953,7 +953,8 @@ pub(crate) fn eval<'a>(
 }
 
 pub(crate) fn eval_const<'a>(context: &'a (dyn EvalContext + 'a), source: &dyn EvalSource) -> Val {
-    let mut stack = vec![Default::default(); 10];
+    const MAX_CONST_EVAL_STACK: usize = 10;
+    let mut stack = vec![Default::default(); MAX_CONST_EVAL_STACK];
     let result = eval(context, source, 1, &mut stack, 0);
     match result {
         Ok(()) => stack.into_iter().next().unwrap(),

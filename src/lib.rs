@@ -37,11 +37,12 @@ pub fn eval(
     params: &[Val],
     returns: &mut [Val],
     code: &[u8],
+    eval_stack_size: usize,
 ) -> Result<(), TrapOrParserError> {
     use wasmparser::FunctionBody;
     let code: &'static [u8] = unsafe { std::slice::from_raw_parts(code.as_ptr(), code.len()) };
     let body = FunctionBody::new(0, code);
-    let mut stack = vec![Default::default(); 1000];
+    let mut stack = vec![Default::default(); eval_stack_size];
 
     let mut non_params = Vec::new();
     for i in body
