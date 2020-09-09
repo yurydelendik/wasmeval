@@ -1,6 +1,5 @@
 use crate::values::{Trap, TrapKind, Val};
 use std::rc::Rc;
-use std::slice;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 
@@ -23,67 +22,46 @@ fn get_br_table_entry(table: &wasmparser::BrTable, i: u32) -> u32 {
         .0
 }
 
-#[derive(Debug)]
-struct EvalStack(Vec<Val>);
-
-const DEFAULT_STACK_CAPACITY: usize = 100;
-
-impl EvalStack {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        EvalStack(Vec::with_capacity(DEFAULT_STACK_CAPACITY))
-    }
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-    pub fn last(&self) -> &Val {
-        self.0.last().unwrap()
-    }
-    pub fn last_mut(&mut self) -> &mut Val {
-        self.0.last_mut().unwrap()
-    }
-    pub fn pop(&mut self) -> Val {
-        self.0.pop().unwrap()
-    }
-    pub fn push(&mut self, val: Val) {
-        self.0.push(val);
-    }
-    pub fn resize_with_default(&mut self, len: usize) {
-        self.0.resize_with(len, Default::default);
-    }
-    pub fn remove_items(&mut self, index: usize, len: usize) {
-        match len {
-            0 => (),
-            1 => drop(self.0.remove(index)),
-            _ => {
-                let vec = &mut self.0;
-                if index + len < vec.len() {
-                    vec[index + len..].reverse();
-                    vec[index..].reverse();
-                }
-                vec.truncate(vec.len() - len);
-            }
+struct EvalStack<'a> {
+    stack: &'a mut [Val],
+    sp: usize,
+}
+impl<'a> EvalStack<'a> {
+    fn compress_stack_items(&mut self, start: usize, len: usize) {
+        if len == 0 {
+            return;
         }
-    }
-    pub fn tail(&self, len: usize) -> &[Val] {
-        &self.0[self.0.len() - len..]
-    }
-    pub fn item_ptr(&self, index: usize) -> *const Val {
-        &self.0[index]
-    }
-    pub fn item_mut_ptr(&mut self, index: usize) -> *mut Val {
-        &mut self.0[index]
-    }
-    pub fn clear(&mut self) {
-        if self.0.len() > DEFAULT_STACK_CAPACITY {
-            self.0.truncate(DEFAULT_STACK_CAPACITY);
-            self.0.shrink_to_fit();
+        for i in (start + len)..self.sp {
+            let v = ::std::mem::replace(&mut self.stack[i], Default::default());
+            self.stack[i - len] = v;
         }
-        self.0.clear();
+        self.sp -= len;
+    }
+    fn push(&mut self, v: Val) {
+        self.stack[self.sp] = v;
+        self.sp += 1;
+    }
+    fn pop(&mut self) -> Val {
+        self.sp -= 1;
+        let v = ::std::mem::replace(&mut self.stack[self.sp], Default::default());
+        v
+    }
+    fn last(&self) -> Val {
+        self.stack[self.sp - 1].clone()
+    }
+    fn last_mut(&mut self) -> &mut Val {
+        &mut self.stack[self.sp - 1]
+    }
+    fn len(&self) -> usize {
+        self.sp
+    }
+    fn local(&self, index: u32) -> Val {
+        self.stack[index as usize].clone()
+    }
+    fn local_mut(&mut self, index: u32) -> &mut Val {
+        &mut self.stack[index as usize]
     }
 }
-
-static mut EVAL_STACKS: Option<Vec<EvalStack>> = None;
 
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
@@ -91,17 +69,16 @@ pub(crate) fn eval<'a>(
     source: &dyn EvalSource,
     return_arity: usize,
     stack_: &mut [Val],
-    sp: usize,
+    sp_: usize,
 ) -> Result<(), Trap> {
+    let mut stack = EvalStack {
+        stack: stack_,
+        sp: sp_,
+    };
+
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
-    let mut stack = unsafe {
-        EVAL_STACKS
-            .get_or_insert_with(|| Vec::new())
-            .pop()
-            .unwrap_or_else(|| EvalStack::new())
-    };
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     let mut memory_cache: Option<Rc<_>> = None;
     block_returns.push(0);
@@ -149,7 +126,7 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! push {
         ($e:expr; $ty:ident) => {
-            stack.push(val_ty!($ty)($e))
+            stack.push(val_ty!($ty)($e));
         };
     }
     macro_rules! pop {
@@ -226,6 +203,7 @@ pub(crate) fn eval<'a>(
             }
         }};
     }
+
     macro_rules! break_to {
         ($depth:expr) => {{
             let target_depth = block_returns.len() - $depth as usize - 1;
@@ -234,13 +212,13 @@ pub(crate) fn eval<'a>(
                     i = end;
                     let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth);
-                    stack.remove_items(leave, stack.len() - tail_len - leave);
+                    stack.compress_stack_items(leave, stack.len() - tail_len - leave);
                 }
                 BreakDestination::LoopStart(start, tail_len) => {
                     i = start;
                     let leave = block_returns[target_depth];
                     block_returns.truncate(target_depth + 1);
-                    stack.remove_items(leave, stack.len() - tail_len - leave);
+                    stack.compress_stack_items(leave, stack.len() - tail_len - leave);
                 }
             }
             continue;
@@ -251,22 +229,10 @@ pub(crate) fn eval<'a>(
             // TODO better signature check
             let params_len = $f.params_arity();
             let results_len = $f.results_arity();
-            let top = stack.len();
-            stack.resize_with_default(top + results_len);
-            let s = &mut stack_[sp..];
-            if params_len > 0 {
-                s[..params_len].clone_from_slice(unsafe {
-                    slice::from_raw_parts(stack.item_ptr(top - params_len), params_len)
-                });
-            };
-            let result = $f.call(s);
+            let result = $f.call(&mut stack.stack[stack.sp - params_len..]);
             match result {
                 Ok(()) => {
-                    if results_len > 0 {
-                        unsafe { slice::from_raw_parts_mut(stack.item_mut_ptr(top), results_len) }
-                            .clone_from_slice(&s[..results_len]);
-                    }
-                    stack.remove_items(top - params_len, params_len);
+                    stack.sp = stack.sp + results_len - params_len;
                 }
                 Err(trap) => {
                     return Err(trap);
@@ -357,16 +323,17 @@ pub(crate) fn eval<'a>(
                 if c != 0 {
                     stack.pop();
                 } else {
-                    *stack.last_mut() = stack.pop();
+                    let v = stack.pop();
+                    *stack.last_mut() = v;
                 }
             }
             Operator::TypedSelect { .. } => op_notimpl!(),
-            Operator::LocalGet { local_index } => stack.push(stack_[*local_index as usize].clone()),
+            Operator::LocalGet { local_index } => stack.push(stack.local(*local_index)),
             Operator::LocalSet { local_index } => {
-                stack_[*local_index as usize] = stack.pop();
+                *stack.local_mut(*local_index) = stack.pop();
             }
             Operator::LocalTee { local_index } => {
-                stack_[*local_index as usize] = stack.last().clone();
+                *stack.local_mut(*local_index) = stack.last();
             }
             Operator::GlobalGet { global_index } => {
                 let g = context.get_global(*global_index);
@@ -981,11 +948,7 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
-    stack_[0..return_arity].clone_from_slice(stack.tail(return_arity));
-    stack.clear();
-    unsafe {
-        EVAL_STACKS.as_mut().unwrap().push(stack);
-    }
+    stack.compress_stack_items(0, stack.len() - return_arity);
     Ok(())
 }
 
