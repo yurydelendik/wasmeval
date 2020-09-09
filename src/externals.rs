@@ -6,7 +6,14 @@ use crate::values::{Trap, Val};
 pub trait Func {
     fn params_arity(&self) -> usize;
     fn results_arity(&self) -> usize;
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
+    fn call(&self, stack: &mut [Val]) -> Result<(), Trap>;
+    fn call_wrapped(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
+        let mut stack = vec![Default::default(); 10000];
+        stack[..args.len()].clone_from_slice(args);
+        self.call(&mut stack)?;
+        results.clone_from_slice(&stack[..results.len()]);
+        Ok(())
+    }
 }
 
 pub trait Memory {

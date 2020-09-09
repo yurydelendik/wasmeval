@@ -15,7 +15,7 @@ impl Func for Callback {
         0
     }
 
-    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+    fn call(&self, _stack: &mut [Val]) -> Result<(), Trap> {
         println!("Hello, world!");
         Ok(())
     }
@@ -26,7 +26,7 @@ fn main() -> Result<(), Error> {
     let module = Module::new(bin.into_boxed_slice())?;
     let instance = Instance::new(&module, &[External::Func(Rc::new(Callback))])?;
     let hello = &instance.exports()[0];
-    if let Ok(()) = hello.func().unwrap().call(&[], &mut []) {
+    if let Ok(()) = hello.func().unwrap().call_wrapped(&[], &mut []) {
         return Ok(());
     }
     bail!("some error")

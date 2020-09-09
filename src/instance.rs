@@ -192,7 +192,8 @@ impl Instance {
         if let Some(start_func) = module_data.start_func {
             let f = instance_data.funcs[start_func as usize].clone();
             debug_assert!(f.params_arity() == 0 && f.results_arity() == 0);
-            f.call(&[], &mut [])?;
+            let mut stack = vec![Default::default(); 10000];
+            f.call(&mut stack)?;
         }
 
         Ok(Instance {

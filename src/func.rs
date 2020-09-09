@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
 use crate::eval::BytecodeCache;
-use crate::eval::{eval, EvalContext, EvalSource, Frame};
+use crate::eval::{eval, EvalContext, EvalSource};
 use crate::externals::Func;
 use crate::instance::InstanceData;
 use crate::module::ModuleData;
@@ -41,6 +41,7 @@ struct InstanceFunctionBody {
     _module_data: Rc<ModuleData>,
     bytecode: BytecodeCache,
     locals: Vec<(u32, Val)>,
+    params_arity: usize,
     frame_size: usize,
 }
 
@@ -68,22 +69,20 @@ impl InstanceFunctionBody {
             _module_data: module_data,
             bytecode,
             locals,
+            params_arity,
             frame_size,
         }
     }
 
-    pub fn create_frame<'a>(&self, ctx: &'a (dyn EvalContext + 'a), params: &[Val]) -> Frame<'a> {
-        let f = Frame::new(ctx, self.frame_size);
-        let locals = f.locals_mut();
-        locals[..params.len()].clone_from_slice(params);
-        let mut j = params.len();
+    pub fn init_frame<'a>(&self, stack: &'a mut [Val]) -> usize {
+        let mut j = self.params_arity;
         for (count, val) in self.locals.iter() {
             for _ in 0..*count {
-                locals[j] = val.clone();
+                stack[j] = val.clone();
                 j += 1;
             }
         }
-        f
+        self.frame_size
     }
 }
 
@@ -116,8 +115,9 @@ impl Func for InstanceFunction {
         func_type.returns.len()
     }
 
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-        debug_assert!(self.results_arity() == results.len());
+    fn call(&self, stack: &mut [Val]) -> Result<(), Trap> {
+        let params_arity = self.params_arity();
+        let results_arity = self.results_arity();
         let instance_data = self.instance_data();
         if self.cache.borrow().is_none() {
             let module_data = &instance_data.module_data;
@@ -125,14 +125,20 @@ impl Func for InstanceFunction {
             let body = InstanceFunctionBody::new(
                 module_data.clone(),
                 &body,
-                self.params_arity(),
-                self.results_arity(),
+                params_arity,
+                results_arity,
                 &instance_data,
             );
             *self.cache.borrow_mut() = Some(body);
         }
         let body = self.cache.borrow();
-        let mut frame = body.as_ref().unwrap().create_frame(&instance_data, params);
-        eval(&mut frame, body.as_ref().unwrap(), results)
+        let sp = body.as_ref().unwrap().init_frame(stack);
+        eval(
+            &instance_data,
+            body.as_ref().unwrap(),
+            results_arity,
+            stack,
+            sp,
+        )
     }
 }

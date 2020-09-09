@@ -53,7 +53,7 @@ fn call_func(f: Rc<dyn Func>, args: Vec<Expression>) -> Result<Box<[Val]>, Trap>
         })
         .collect::<Vec<_>>();
     let mut out = vec![Default::default(); f.results_arity()];
-    f.call(&args, &mut out)
+    f.call_wrapped(&args, &mut out)
         .map(move |()| out.into_boxed_slice())
 }
 

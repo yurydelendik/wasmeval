@@ -29,8 +29,8 @@ fn main() -> Result<(), Error> {
     if let Some(fn_index) = fn_index {
         let f = &instance.exports()[fn_index];
         let mut result = vec![Default::default()];
-        if let Ok(()) = f.func().unwrap().call(&[], &mut result) {
-            println!("{:?}", result);
+        if let Ok(()) = f.func().unwrap().call_wrapped(&[], &mut result) {
+            eprintln!("{:?}", result);
             return Ok(());
         }
         bail!("some error")

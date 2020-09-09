@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::slice;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
-pub(crate) use context::Frame;
 
 pub use context::{EvalContext, FuncType};
 
@@ -88,11 +87,12 @@ static mut EVAL_STACKS: Option<Vec<EvalStack>> = None;
 
 #[allow(unused_variables)]
 pub(crate) fn eval<'a>(
-    frame: &'a mut Frame,
+    context: &'a (dyn EvalContext + 'a),
     source: &dyn EvalSource,
-    returns: &mut [Val],
+    return_arity: usize,
+    stack_: &mut [Val],
+    sp: usize,
 ) -> Result<(), Trap> {
-    let return_arity = returns.len();
     let bytecode = source.bytecode();
     let operators = bytecode.operators();
     let mut i = 0;
@@ -105,7 +105,6 @@ pub(crate) fn eval<'a>(
     let mut block_returns = Vec::with_capacity(bytecode.max_control_depth() + 1);
     let mut memory_cache: Option<Rc<_>> = None;
     block_returns.push(0);
-
     macro_rules! val_ty {
         (i32) => {
             Val::I32
@@ -177,7 +176,7 @@ pub(crate) fn eval<'a>(
     macro_rules! load {
         ($memarg:expr; $ty:ident) => {{
             let offset = pop!(i32) as u32;
-            let ptr = frame.context()
+            let ptr = context
                 .get_memory()
                 .content_ptr($memarg, offset, val_size!($ty));
             if ptr.is_null() {
@@ -188,7 +187,7 @@ pub(crate) fn eval<'a>(
         }};
         ($memarg:expr; $ty:ident as $tt:ident) => {{
             let offset = pop!(i32) as u32;
-            let ptr = frame.context()
+            let ptr = context
                 .get_memory()
                 .content_ptr($memarg, offset, std::mem::size_of::<$tt>() as u32);
             if ptr.is_null() {
@@ -200,7 +199,7 @@ pub(crate) fn eval<'a>(
     }
     macro_rules! memory {
         () => {
-            memory_cache.get_or_insert_with(|| frame.context().get_memory().clone())
+            memory_cache.get_or_insert_with(|| context.get_memory().clone())
         };
     }
     macro_rules! store {
@@ -254,19 +253,19 @@ pub(crate) fn eval<'a>(
             let results_len = $f.results_arity();
             let top = stack.len();
             stack.resize_with_default(top + results_len);
-            let params = if params_len > 0 {
-                unsafe { slice::from_raw_parts(stack.item_ptr(top - params_len), params_len) }
-            } else {
-                &[]
+            let s = &mut stack_[sp..];
+            if params_len > 0 {
+                s[..params_len].clone_from_slice(unsafe {
+                    slice::from_raw_parts(stack.item_ptr(top - params_len), params_len)
+                });
             };
-            let results = if results_len > 0 {
-                unsafe { slice::from_raw_parts_mut(stack.item_mut_ptr(top), results_len) }
-            } else {
-                &mut []
-            };
-            let result = $f.call(params, results);
+            let result = $f.call(s);
             match result {
                 Ok(()) => {
+                    if results_len > 0 {
+                        unsafe { slice::from_raw_parts_mut(stack.item_mut_ptr(top), results_len) }
+                            .clone_from_slice(&s[..results_len]);
+                    }
                     stack.remove_items(top - params_len, params_len);
                 }
                 Err(trap) => {
@@ -330,13 +329,13 @@ pub(crate) fn eval<'a>(
                 break;
             }
             Operator::Call { function_index } => {
-                let f = frame.context().get_function(*function_index);
+                let f = context.get_function(*function_index);
                 call!(f)
             }
             Operator::CallIndirect { index, table_index } => {
                 let func_index = pop!(i32) as u32;
-                let table = frame.context().get_table(*table_index);
-                let ty = frame.context().get_type(*index);
+                let table = context.get_table(*table_index);
+                let ty = context.get_type(*index);
                 let f = match table.get_func_with_type(func_index, *index) {
                     Ok(Some(f)) => f,
                     Ok(None) => trap!(TrapKind::Uninitialized),
@@ -362,19 +361,19 @@ pub(crate) fn eval<'a>(
                 }
             }
             Operator::TypedSelect { .. } => op_notimpl!(),
-            Operator::LocalGet { local_index } => stack.push(frame.get_local(*local_index).clone()),
+            Operator::LocalGet { local_index } => stack.push(stack_[*local_index as usize].clone()),
             Operator::LocalSet { local_index } => {
-                *frame.get_local_mut(*local_index) = stack.pop();
+                stack_[*local_index as usize] = stack.pop();
             }
             Operator::LocalTee { local_index } => {
-                *frame.get_local_mut(*local_index) = stack.last().clone();
+                stack_[*local_index as usize] = stack.last().clone();
             }
             Operator::GlobalGet { global_index } => {
-                let g = frame.context().get_global(*global_index);
+                let g = context.get_global(*global_index);
                 stack.push(g.content());
             }
             Operator::GlobalSet { global_index } => {
-                let g = frame.context().get_global(*global_index);
+                let g = context.get_global(*global_index);
                 g.set_content(&stack.pop());
             }
             Operator::I32Load { memarg } => {
@@ -447,12 +446,12 @@ pub(crate) fn eval<'a>(
                 store!(memarg; i64 as u32);
             }
             Operator::MemorySize { .. } => {
-                let current = frame.context().get_memory().current();
+                let current = context.get_memory().current();
                 push!(current as i32; i32)
             }
             Operator::MemoryGrow { .. } => {
                 let delta = pop!(i32) as u32;
-                let current = frame.context().get_memory().grow(delta);
+                let current = context.get_memory().grow(delta);
                 push!(current as i32; i32)
             }
             Operator::I32Const { value } => push!(*value; i32),
@@ -982,7 +981,7 @@ pub(crate) fn eval<'a>(
         }
         i += 1;
     }
-    returns.clone_from_slice(stack.tail(return_arity));
+    stack_[0..return_arity].clone_from_slice(stack.tail(return_arity));
     stack.clear();
     unsafe {
         EVAL_STACKS.as_mut().unwrap().push(stack);
@@ -991,11 +990,10 @@ pub(crate) fn eval<'a>(
 }
 
 pub(crate) fn eval_const<'a>(context: &'a (dyn EvalContext + 'a), source: &dyn EvalSource) -> Val {
-    let mut vals = vec![Default::default()];
-    let mut frame = Frame::new(context, 0);
-    let result = eval(&mut frame, source, &mut vals);
+    let mut stack = vec![Default::default(); 10];
+    let result = eval(context, source, 1, &mut stack, 0);
     match result {
-        Ok(()) => vals.into_iter().next().unwrap(),
+        Ok(()) => stack.into_iter().next().unwrap(),
         Err(_) => {
             panic!("trap duing eval_const");
         }

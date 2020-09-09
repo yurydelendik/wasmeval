@@ -19,7 +19,7 @@ fn main() -> Result<(), Error> {
     if let Ok(()) = gcd
         .func()
         .unwrap()
-        .call(&[Val::I32(6), Val::I32(27)], &mut result)
+        .call_wrapped(&[Val::I32(6), Val::I32(27)], &mut result)
     {
         println!("{:?}", result);
         return Ok(());

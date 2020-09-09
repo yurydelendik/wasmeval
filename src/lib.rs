@@ -11,7 +11,7 @@ pub mod data {
     pub use wasmparser::{FuncType, Type};
 }
 
-use crate::eval::{eval as eval_internal, BytecodeCache, EvalSource, Frame};
+use crate::eval::{eval as eval_internal, BytecodeCache, EvalSource};
 use crate::values::get_default_value;
 
 mod eval;
@@ -41,6 +41,7 @@ pub fn eval(
     use wasmparser::FunctionBody;
     let code: &'static [u8] = unsafe { std::slice::from_raw_parts(code.as_ptr(), code.len()) };
     let body = FunctionBody::new(0, code);
+    let mut stack = vec![Default::default(); 1000];
 
     let mut non_params = Vec::new();
     for i in body
@@ -67,10 +68,12 @@ pub fn eval(
     let bytecode_cache = BytecodeCache::new(code_reader, ctx, returns.len());
     let source = S(bytecode_cache);
 
-    let mut f = Frame::new(ctx, params.len() + non_params.len());
-    let locals = f.locals_mut();
-    locals[..params.len()].clone_from_slice(params);
-    locals[params.len()..].clone_from_slice(&non_params);
+    let locals_len = params.len() + non_params.len();
+    stack[..params.len()].clone_from_slice(params);
+    stack[params.len()..locals_len].clone_from_slice(&non_params);
+    eval_internal(ctx, &source, returns.len(), &mut stack, locals_len)
+        .map_err(|e| TrapOrParserError::Trap(e))?;
 
-    eval_internal(&mut f, &source, returns).map_err(|e| TrapOrParserError::Trap(e))
+    returns.clone_from_slice(&stack[0..returns.len()]);
+    Ok(())
 }
