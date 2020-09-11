@@ -1,13 +1,17 @@
 use crate::values::{Trap, TrapKind, Val};
 use std::rc::Rc;
 
+use self::f32 as wasm_f32;
+use self::f64 as wasm_f64;
+
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 
 pub use context::{EvalContext, FuncType};
 
 mod bytecode;
 mod context;
-mod floats;
+mod f32;
+mod f64;
 
 #[allow(dead_code)]
 const STACK_LIMIT: u32 = 10;
@@ -463,18 +467,18 @@ pub(crate) fn eval<'a>(
             Operator::I64GeU => {
                 step!(|a:i64, b:i64| -> i32 if (a as u64) >= b as u64 { 1 } else { 0 })
             }
-            Operator::F32Eq => step!(|a:f32, b:f32| -> i32 floats::eq_f32(a, b)),
-            Operator::F32Ne => step!(|a:f32, b:f32| -> i32 floats::ne_f32(a, b)),
-            Operator::F32Lt => step!(|a:f32, b:f32| -> i32 floats::lt_f32(a, b)),
-            Operator::F32Gt => step!(|a:f32, b:f32| -> i32 floats::gt_f32(a, b)),
-            Operator::F32Le => step!(|a:f32, b:f32| -> i32 floats::le_f32(a, b)),
-            Operator::F32Ge => step!(|a:f32, b:f32| -> i32 floats::ge_f32(a, b)),
-            Operator::F64Eq => step!(|a:f64, b:f64| -> i32 floats::eq_f64(a, b)),
-            Operator::F64Ne => step!(|a:f64, b:f64| -> i32 floats::ne_f64(a, b)),
-            Operator::F64Lt => step!(|a:f64, b:f64| -> i32 floats::lt_f64(a, b)),
-            Operator::F64Gt => step!(|a:f64, b:f64| -> i32 floats::gt_f64(a, b)),
-            Operator::F64Le => step!(|a:f64, b:f64| -> i32 floats::le_f64(a, b)),
-            Operator::F64Ge => step!(|a:f64, b:f64| -> i32 floats::ge_f64(a, b)),
+            Operator::F32Eq => step!(|a:f32, b:f32| -> i32 wasm_f32::eq(a, b)),
+            Operator::F32Ne => step!(|a:f32, b:f32| -> i32 wasm_f32::ne(a, b)),
+            Operator::F32Lt => step!(|a:f32, b:f32| -> i32 wasm_f32::lt(a, b)),
+            Operator::F32Gt => step!(|a:f32, b:f32| -> i32 wasm_f32::gt(a, b)),
+            Operator::F32Le => step!(|a:f32, b:f32| -> i32 wasm_f32::le(a, b)),
+            Operator::F32Ge => step!(|a:f32, b:f32| -> i32 wasm_f32::ge(a, b)),
+            Operator::F64Eq => step!(|a:f64, b:f64| -> i32 wasm_f64::eq(a, b)),
+            Operator::F64Ne => step!(|a:f64, b:f64| -> i32 wasm_f64::ne(a, b)),
+            Operator::F64Lt => step!(|a:f64, b:f64| -> i32 wasm_f64::lt(a, b)),
+            Operator::F64Gt => step!(|a:f64, b:f64| -> i32 wasm_f64::gt(a, b)),
+            Operator::F64Le => step!(|a:f64, b:f64| -> i32 wasm_f64::le(a, b)),
+            Operator::F64Ge => step!(|a:f64, b:f64| -> i32 wasm_f64::ge(a, b)),
             Operator::I32Clz => step!(|a:i32| -> i32 a.leading_zeros() as i32),
             Operator::I32Ctz => step!(|a:i32| -> i32 a.trailing_zeros() as i32),
             Operator::I32Popcnt => step!(|a:i32| -> i32 a.count_ones() as i32),
@@ -593,79 +597,79 @@ pub(crate) fn eval<'a>(
             }
             Operator::I64Rotl => step!(|a:i64, b:i64| -> i64 a.rotate_left(b as u32)),
             Operator::I64Rotr => step!(|a:i64, b:i64| -> i64 a.rotate_right(b as u32)),
-            Operator::F32Abs => step!(|a:f32| -> f32 floats::abs_f32(a)),
-            Operator::F32Neg => step!(|a:f32| -> f32 floats::neg_f32(a)),
-            Operator::F32Ceil => step!(|a:f32| -> f32 floats::ceil_f32(a)),
-            Operator::F32Floor => step!(|a:f32| -> f32 floats::floor_f32(a)),
-            Operator::F32Trunc => step!(|a:f32| -> f32 floats::trunc_f32(a)),
-            Operator::F32Nearest => step!(|a:f32| -> f32 floats::nearby_f32(a)),
-            Operator::F32Sqrt => step!(|a:f32| -> f32 floats::sqrt_f32(a)),
-            Operator::F32Add => step!(|a:f32, b:f32| -> f32 floats::add_f32(a, b)),
-            Operator::F32Sub => step!(|a:f32, b:f32| -> f32 floats::sub_f32(a, b)),
-            Operator::F32Mul => step!(|a:f32, b:f32| -> f32 floats::mul_f32(a, b)),
-            Operator::F32Div => step!(|a:f32, b:f32| -> f32 floats::div_f32(a, b)),
-            Operator::F32Min => step!(|a:f32, b:f32| -> f32 floats::min_f32(a, b)),
-            Operator::F32Max => step!(|a:f32, b:f32| -> f32 floats::max_f32(a, b)),
-            Operator::F32Copysign => step!(|a:f32, b:f32| -> f32 floats::copysign_f32(a, b)),
-            Operator::F64Abs => step!(|a:f64| -> f64 floats::abs_f64(a)),
-            Operator::F64Neg => step!(|a:f64| -> f64 floats::neg_f64(a)),
-            Operator::F64Ceil => step!(|a:f64| -> f64 floats::ceil_f64(a)),
-            Operator::F64Floor => step!(|a:f64| -> f64 floats::floor_f64(a)),
-            Operator::F64Trunc => step!(|a:f64| -> f64 floats::trunc_f64(a)),
-            Operator::F64Nearest => step!(|a:f64| -> f64 floats::nearby_f64(a)),
-            Operator::F64Sqrt => step!(|a:f64| -> f64 floats::sqrt_f64(a)),
-            Operator::F64Add => step!(|a:f64, b:f64| -> f64 floats::add_f64(a, b)),
-            Operator::F64Sub => step!(|a:f64, b:f64| -> f64 floats::sub_f64(a, b)),
-            Operator::F64Mul => step!(|a:f64, b:f64| -> f64 floats::mul_f64(a, b)),
-            Operator::F64Div => step!(|a:f64, b:f64| -> f64 floats::div_f64(a, b)),
-            Operator::F64Min => step!(|a:f64, b:f64| -> f64 floats::min_f64(a, b)),
-            Operator::F64Max => step!(|a:f64, b:f64| -> f64 floats::max_f64(a, b)),
-            Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 floats::copysign_f64(a, b)),
+            Operator::F32Abs => step!(|a:f32| -> f32 wasm_f32::abs(a)),
+            Operator::F32Neg => step!(|a:f32| -> f32 wasm_f32::neg(a)),
+            Operator::F32Ceil => step!(|a:f32| -> f32 wasm_f32::ceil(a)),
+            Operator::F32Floor => step!(|a:f32| -> f32 wasm_f32::floor(a)),
+            Operator::F32Trunc => step!(|a:f32| -> f32 wasm_f32::trunc(a)),
+            Operator::F32Nearest => step!(|a:f32| -> f32 wasm_f32::nearby(a)),
+            Operator::F32Sqrt => step!(|a:f32| -> f32 wasm_f32::sqrt(a)),
+            Operator::F32Add => step!(|a:f32, b:f32| -> f32 wasm_f32::add(a, b)),
+            Operator::F32Sub => step!(|a:f32, b:f32| -> f32 wasm_f32::sub(a, b)),
+            Operator::F32Mul => step!(|a:f32, b:f32| -> f32 wasm_f32::mul(a, b)),
+            Operator::F32Div => step!(|a:f32, b:f32| -> f32 wasm_f32::div(a, b)),
+            Operator::F32Min => step!(|a:f32, b:f32| -> f32 wasm_f32::min(a, b)),
+            Operator::F32Max => step!(|a:f32, b:f32| -> f32 wasm_f32::max(a, b)),
+            Operator::F32Copysign => step!(|a:f32, b:f32| -> f32 wasm_f32::copysign(a, b)),
+            Operator::F64Abs => step!(|a:f64| -> f64 wasm_f64::abs(a)),
+            Operator::F64Neg => step!(|a:f64| -> f64 wasm_f64::neg(a)),
+            Operator::F64Ceil => step!(|a:f64| -> f64 wasm_f64::ceil(a)),
+            Operator::F64Floor => step!(|a:f64| -> f64 wasm_f64::floor(a)),
+            Operator::F64Trunc => step!(|a:f64| -> f64 wasm_f64::trunc(a)),
+            Operator::F64Nearest => step!(|a:f64| -> f64 wasm_f64::nearby(a)),
+            Operator::F64Sqrt => step!(|a:f64| -> f64 wasm_f64::sqrt(a)),
+            Operator::F64Add => step!(|a:f64, b:f64| -> f64 wasm_f64::add(a, b)),
+            Operator::F64Sub => step!(|a:f64, b:f64| -> f64 wasm_f64::sub(a, b)),
+            Operator::F64Mul => step!(|a:f64, b:f64| -> f64 wasm_f64::mul(a, b)),
+            Operator::F64Div => step!(|a:f64, b:f64| -> f64 wasm_f64::div(a, b)),
+            Operator::F64Min => step!(|a:f64, b:f64| -> f64 wasm_f64::min(a, b)),
+            Operator::F64Max => step!(|a:f64, b:f64| -> f64 wasm_f64::max(a, b)),
+            Operator::F64Copysign => step!(|a:f64, b:f64| -> f64 wasm_f64::copysign(a, b)),
             Operator::I32WrapI64 => step!(|a:i64| -> i32 a as i32),
-            Operator::I32TruncF32S => step!(|a:f32| -> i32 match floats::f32_trunc_i32(a) {
+            Operator::I32TruncF32S => step!(|a:f32| -> i32 match wasm_f32::trunc_i32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncF32U => step!(|a:f32| -> i32 match floats::f32_trunc_u32(a) {
+            Operator::I32TruncF32U => step!(|a:f32| -> i32 match wasm_f32::trunc_u32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncF64S => step!(|a:f64| -> i32 match floats::f64_trunc_i32(a) {
+            Operator::I32TruncF64S => step!(|a:f64| -> i32 match wasm_f64::trunc_i32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I32TruncF64U => step!(|a:f64| -> i32 match floats::f64_trunc_u32(a) {
+            Operator::I32TruncF64U => step!(|a:f64| -> i32 match wasm_f64::trunc_u32(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
             Operator::I64ExtendI32S => step!(|a:i32| -> i64 (a as i64)),
             Operator::I64ExtendI32U => step!(|a:i32| -> i64 (a as u32 as i64)),
-            Operator::I64TruncF32S => step!(|a:f32| -> i64 match floats::f32_trunc_i64(a) {
+            Operator::I64TruncF32S => step!(|a:f32| -> i64 match wasm_f32::trunc_i64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncF32U => step!(|a:f32| -> i64 match floats::f32_trunc_u64(a) {
+            Operator::I64TruncF32U => step!(|a:f32| -> i64 match wasm_f32::trunc_u64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncF64S => step!(|a:f64| -> i64 match floats::f64_trunc_i64(a) {
+            Operator::I64TruncF64S => step!(|a:f64| -> i64 match wasm_f64::trunc_i64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::I64TruncF64U => step!(|a:f64| -> i64 match floats::f64_trunc_u64(a) {
+            Operator::I64TruncF64U => step!(|a:f64| -> i64 match wasm_f64::trunc_u64(a) {
                 Ok(c) => c,
                 Err(kind) => trap!(kind),
             }),
-            Operator::F32ConvertI32S => step!(|a:i32| -> f32 floats::i32_to_f32(a)),
-            Operator::F32ConvertI32U => step!(|a:i32| -> f32 floats::u32_to_f32(a)),
-            Operator::F32ConvertI64S => step!(|a:i64| -> f32 floats::i64_to_f32(a)),
-            Operator::F32ConvertI64U => step!(|a:i64| -> f32 floats::u64_to_f32(a)),
-            Operator::F32DemoteF64 => step!(|a:f64| -> f32 floats::f64_to_f32(a)),
-            Operator::F64ConvertI32S => step!(|a:i32| -> f64 floats::i32_to_f64(a)),
-            Operator::F64ConvertI32U => step!(|a:i32| -> f64 floats::u32_to_f64(a)),
-            Operator::F64ConvertI64S => step!(|a:i64| -> f64 floats::i64_to_f64(a)),
-            Operator::F64ConvertI64U => step!(|a:i64| -> f64 floats::u64_to_f64(a)),
-            Operator::F64PromoteF32 => step!(|a:f32| -> f64 floats::f32_to_f64(a)),
+            Operator::F32ConvertI32S => step!(|a:i32| -> f32 wasm_f32::from_i32(a)),
+            Operator::F32ConvertI32U => step!(|a:i32| -> f32 wasm_f32::from_u32(a)),
+            Operator::F32ConvertI64S => step!(|a:i64| -> f32 wasm_f32::from_i64(a)),
+            Operator::F32ConvertI64U => step!(|a:i64| -> f32 wasm_f32::from_u64(a)),
+            Operator::F32DemoteF64 => step!(|a:f64| -> f32 wasm_f32::from_f64(a)),
+            Operator::F64ConvertI32S => step!(|a:i32| -> f64 wasm_f64::from_i32(a)),
+            Operator::F64ConvertI32U => step!(|a:i32| -> f64 wasm_f64::from_u32(a)),
+            Operator::F64ConvertI64S => step!(|a:i64| -> f64 wasm_f64::from_i64(a)),
+            Operator::F64ConvertI64U => step!(|a:i64| -> f64 wasm_f64::from_u64(a)),
+            Operator::F64PromoteF32 => step!(|a:f32| -> f64 wasm_f64::from_f32(a)),
             Operator::I32ReinterpretF32 => step!(|a:f32| -> i32 a as i32),
             Operator::I64ReinterpretF64 => step!(|a:f64| -> i64 a as i64),
             Operator::F32ReinterpretI32 => step!(|a:i32| -> f32 a as u32),
