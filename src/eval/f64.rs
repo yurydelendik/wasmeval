@@ -2,6 +2,30 @@ use std::mem::transmute;
 
 use crate::values::TrapKind;
 
+const NAN_MASK: u64 = 0x7FF0_0000_0000_0000;
+const NAN_DATA_MASK: u64 = 0xF_FFFF_FFFF_FFFF;
+const NAN_DATA_CANONICAL: u64 = 0x8_0000_0000_0000;
+const NEG_0: u64 = 0x8000_0000_0000_0000;
+
+#[inline]
+fn is_nan(a: u64) -> bool {
+    (a & NAN_MASK) == NAN_MASK && (a & NAN_DATA_MASK) != 0
+}
+
+fn nans(a: u64, b: u64) -> Option<u64> {
+    if is_nan(a) {
+        if is_nan(b) {
+            Some(NAN_MASK | NAN_DATA_CANONICAL | (a ^ b))
+        } else {
+            Some(a | NAN_DATA_CANONICAL)
+        }
+    } else if is_nan(b) {
+        Some(b | NAN_DATA_CANONICAL)
+    } else {
+        None
+    }
+}
+
 #[inline]
 pub fn abs(a: u64) -> u64 {
     unsafe {
@@ -100,6 +124,12 @@ pub fn div(a: u64, b: u64) -> u64 {
 
 #[inline]
 pub fn min(a: u64, b: u64) -> u64 {
+    if let Some(nan) = nans(a, b) {
+        return nan;
+    }
+    if (a | b) == NEG_0 {
+        return NEG_0;
+    }
     unsafe {
         let a: f64 = transmute(a);
         let b: f64 = transmute(b);
@@ -109,6 +139,12 @@ pub fn min(a: u64, b: u64) -> u64 {
 
 #[inline]
 pub fn max(a: u64, b: u64) -> u64 {
+    if let Some(nan) = nans(a, b) {
+        return nan;
+    }
+    if (a | b) == NEG_0 {
+        return if a == b { NEG_0 } else { 0 };
+    }
     unsafe {
         let a: f64 = transmute(a);
         let b: f64 = transmute(b);

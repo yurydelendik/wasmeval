@@ -136,8 +136,8 @@ fn assert_value(value: &Val, expected: &wast::AssertExpression) -> bool {
             if let Val::F64(j) = value {
                 match f {
                     NanPattern::Value(f) => *j == f.bits,
-                    NanPattern::ArithmeticNan => (*j & 0xf_ffff_ffff_ffff) != 0,
-                    NanPattern::CanonicalNan => (*j & 0xf_ffff_ffff_ffff) == 0,
+                    NanPattern::ArithmeticNan => (*j & 0xf_ffff_ffff_ffff) >= 0x8_0000_0000_0000,
+                    NanPattern::CanonicalNan => (*j & 0xf_ffff_ffff_ffff) == 0x8_0000_0000_0000,
                 }
             } else {
                 false
@@ -367,11 +367,7 @@ fn run_spec_tests() {
             |name, line| match (name, line) {
                 ("linking.wast", 387)
                 | ("linking.wast", 386)
-                | ("float_misc.wast", _)
-                | ("float_exprs.wast", _)
                 | ("conversions.wast", _)
-                | ("f32.wast", _)
-                | ("f64.wast", _)
                 | ("i64.wast", 291)
                 | ("i64.wast", 292)
                 | ("i64.wast", 293)
