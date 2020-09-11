@@ -270,6 +270,82 @@ pub fn trunc_u64(a: u64) -> Result<i64, TrapKind> {
 }
 
 #[inline]
+pub fn trunc_i32_sat(a: u64) -> i32 {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return 0;
+        }
+        const MIN: f64 = -2147483648.0;
+        const MAX: f64 = 2147483647.0;
+        if a < MIN {
+            i32::MIN
+        } else if a > MAX {
+            i32::MAX
+        } else {
+            a as i32
+        }
+    }
+}
+
+#[inline]
+pub fn trunc_u32_sat(a: u64) -> i32 {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return 0;
+        }
+        const MIN: f64 = 0.0;
+        const MAX: f64 = 4294967295.0;
+        if a < MIN {
+            u32::MIN as i32
+        } else if a > MAX {
+            u32::MAX as i32
+        } else {
+            (a as u32) as i32
+        }
+    }
+}
+
+#[inline]
+pub fn trunc_i64_sat(a: u64) -> i64 {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return 0;
+        }
+        const MIN: f64 = -9223372036854775808.0;
+        const MAX: f64 = 9223372036854774784.0;
+        if a < MIN {
+            i64::MIN
+        } else if a > MAX {
+            i64::MAX
+        } else {
+            a as i64
+        }
+    }
+}
+
+#[inline]
+pub fn trunc_u64_sat(a: u64) -> i64 {
+    unsafe {
+        let a = transmute::<_, f64>(a).trunc();
+        if a.is_nan() {
+            return 0;
+        }
+        const MIN: f64 = 0.0;
+        const MAX: f64 = 18446744073709550000.0;
+        if a < MIN {
+            u64::MIN as i64
+        } else if a > MAX {
+            u64::MAX as i64
+        } else {
+            (a as u64) as i64
+        }
+    }
+}
+
+#[inline]
 pub fn eq(a: u64, b: u64) -> i32 {
     unsafe {
         let a: f64 = transmute(a);

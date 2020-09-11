@@ -674,17 +674,17 @@ pub(crate) fn eval<'a>(
             Operator::I64ReinterpretF64 => step!(|a:f64| -> i64 a as i64),
             Operator::F32ReinterpretI32 => step!(|a:i32| -> f32 a as u32),
             Operator::F64ReinterpretI64 => step!(|a:i64| -> f64 a as u64),
-            Operator::I32TruncSatF32S
-            | Operator::I32TruncSatF32U
-            | Operator::I32TruncSatF64S
-            | Operator::I32TruncSatF64U
-            | Operator::I64TruncSatF32S
-            | Operator::I64TruncSatF32U
-            | Operator::I64TruncSatF64S
-            | Operator::I64TruncSatF64U => op_notimpl!(),
+            Operator::I32TruncSatF32S => step!(|a:f32| -> i32 wasm_f32::trunc_i32_sat(a)),
+            Operator::I32TruncSatF32U => step!(|a:f32| -> i32 wasm_f32::trunc_u32_sat(a)),
+            Operator::I32TruncSatF64S => step!(|a:f64| -> i32 wasm_f64::trunc_i32_sat(a)),
+            Operator::I32TruncSatF64U => step!(|a:f64| -> i32 wasm_f64::trunc_u32_sat(a)),
+            Operator::I64TruncSatF32S => step!(|a:f32| -> i64 wasm_f32::trunc_i64_sat(a)),
+            Operator::I64TruncSatF32U => step!(|a:f32| -> i64 wasm_f32::trunc_u64_sat(a)),
+            Operator::I64TruncSatF64S => step!(|a:f64| -> i64 wasm_f64::trunc_i64_sat(a)),
+            Operator::I64TruncSatF64U => step!(|a:f64| -> i64 wasm_f64::trunc_u64_sat(a)),
             Operator::I32Extend16S => step!(|a: i32| -> i32 (a as i16) as i32),
             Operator::I32Extend8S => step!(|a: i32| -> i32 (a as i8) as i32),
-            Operator::I64Extend32S => step!(|a: i64| -> i64 a as i64),
+            Operator::I64Extend32S => step!(|a: i64| -> i64 (a as i32) as i64),
             Operator::I64Extend16S => step!(|a: i64| -> i64 (a as i16) as i64),
             Operator::I64Extend8S => step!(|a: i64| -> i64 (a as i8) as i64),
             Operator::I32AtomicLoad { .. }

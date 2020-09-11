@@ -367,11 +367,6 @@ fn run_spec_tests() {
             |name, line| match (name, line) {
                 ("linking.wast", 387)
                 | ("linking.wast", 386)
-                | ("conversions.wast", _)
-                | ("i64.wast", 291)
-                | ("i64.wast", 292)
-                | ("i64.wast", 293)
-                | ("i64.wast", 294)
                 | ("fac.wast", 106)
                 // type mismatch
                 | ("call_indirect.wast", 498)
