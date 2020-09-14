@@ -347,11 +347,8 @@ where
     Ok(())
 }
 
-const SPEC_TESTS_PATH: &str = "testsuite";
-
-#[test]
-fn run_spec_tests() {
-    for entry in read_dir(SPEC_TESTS_PATH).unwrap() {
+fn run_dir_tests<F: Fn(&str, usize) -> bool>(path: &str, ignore: F) {
+    for entry in read_dir(path).unwrap() {
         let dir = entry.unwrap();
         if !dir.file_type().unwrap().is_file()
             || dir.path().extension().map(|s| s.to_str().unwrap()) != Some("wast")
@@ -363,8 +360,17 @@ fn run_spec_tests() {
         run_wabt_scripts(
             dir.file_name().to_str().expect("name"),
             &data,
-            //|_, _| false,
-            |name, line| match (name, line) {
+            |name, line| ignore(name, line),
+        )
+        .expect("success");
+    }
+}
+
+#[test]
+fn run_spec_tests() {
+    const SPEC_TESTS_PATH: &str = "testsuite";
+    run_dir_tests(SPEC_TESTS_PATH, |name, line| match (name, line) {
+                // persist dependencies
                 ("linking.wast", 387)
                 // stack "heavy"
                 | ("call.wast", 329)
@@ -376,8 +382,5 @@ fn run_spec_tests() {
                 | ("call_indirect.wast", 581)
                 | ("call_indirect.wast", 582) => true,
                 _ => false,
-            },
-        )
-        .expect("success");
-    }
+            });
 }
