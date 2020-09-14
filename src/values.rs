@@ -55,6 +55,7 @@ impl Default for Val {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValType {
     I32,
     I64,

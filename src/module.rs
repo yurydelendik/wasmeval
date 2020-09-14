@@ -2,13 +2,15 @@ use anyhow::{bail, Error};
 use std::pin::Pin;
 use std::rc::Rc;
 use wasmparser::{
-    Data, Element, Export, FuncType, FunctionBody, Global, Import, ImportSectionEntryType,
-    MemoryType, Name, NameSectionReader, Parser, Payload, TableType, TypeDef,
+    Data, Element, Export, FunctionBody, Global, Import, ImportSectionEntryType, MemoryType, Name,
+    NameSectionReader, Parser, Payload, TableType, TypeDef,
 };
+
+use crate::externals::FuncType;
 
 pub(crate) struct ModuleData {
     pub buf: Pin<Box<[u8]>>,
-    pub types: Box<[FuncType]>,
+    pub types: Box<[Rc<FuncType>]>,
     pub imports: Box<[Import<'static>]>,
     pub exports: Box<[Export<'static>]>,
     pub memories: Box<[MemoryType]>,
@@ -51,7 +53,7 @@ fn read_module_data(buf: Pin<Box<[u8]>>) -> Result<ModuleData, Error> {
                     section
                         .into_iter()
                         .map(|ty| match ty {
-                            Ok(TypeDef::Func(f)) => Ok(f),
+                            Ok(TypeDef::Func(f)) => Ok(Rc::new(f.into())),
                             Err(e) => bail!("type error: {:?}", e),
                             _ => bail!("unsupported typedef"),
                         })

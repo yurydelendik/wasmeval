@@ -1,11 +1,24 @@
 use std::rc::Rc;
 pub use wasmparser::MemoryImmediate;
 
-use crate::values::{Trap, Val};
+use crate::values::{Trap, Val, ValType};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FuncType {
+    pub params: Box<[ValType]>,
+    pub returns: Box<[ValType]>,
+}
+
+impl From<wasmparser::FuncType> for FuncType {
+    fn from(ty: wasmparser::FuncType) -> Self {
+        let params = ty.params.into_iter().map(|t| t.clone().into()).collect();
+        let returns = ty.returns.into_iter().map(|t| t.clone().into()).collect();
+        Self { params, returns }
+    }
+}
 
 pub trait Func {
-    fn params_arity(&self) -> usize;
-    fn results_arity(&self) -> usize;
+    fn ty(&self) -> &Rc<FuncType>;
     fn call(&self, stack: &mut [Val]) -> Result<(), Trap>;
     fn call_wrapped(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         let mut stack = vec![Default::default(); 10000];

@@ -52,7 +52,7 @@ fn call_func(f: Rc<dyn Func>, args: Vec<Expression>) -> Result<Box<[Val]>, Trap>
             }
         })
         .collect::<Vec<_>>();
-    let mut out = vec![Default::default(); f.results_arity()];
+    let mut out = vec![Default::default(); f.ty().returns.len()];
     f.call_wrapped(&args, &mut out)
         .map(move |()| out.into_boxed_slice())
 }
@@ -366,13 +366,6 @@ fn run_spec_tests() {
             //|_, _| false,
             |name, line| match (name, line) {
                 ("linking.wast", 387)
-                | ("linking.wast", 386)
-                | ("fac.wast", 106)
-                // type mismatch
-                | ("call_indirect.wast", 498)
-                | ("call_indirect.wast", 508)
-                | ("call_indirect.wast", 515)
-                | ("call_indirect.wast", 522)
                 // stack "heavy"
                 | ("call.wast", 329)
                 | ("call.wast", 330)

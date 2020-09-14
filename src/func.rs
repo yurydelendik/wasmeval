@@ -3,7 +3,7 @@ use std::rc::{Rc, Weak};
 
 use crate::eval::BytecodeCache;
 use crate::eval::{eval, EvalContext, EvalSource};
-use crate::externals::Func;
+use crate::externals::{Func, FuncType};
 use crate::instance::InstanceData;
 use crate::module::ModuleData;
 use crate::values::{get_default_value, Trap, Val};
@@ -22,17 +22,20 @@ pub(crate) struct InstanceFunction {
     source: Box<dyn InstanceFunctionSource>,
     defined_index: usize,
     cache: RefCell<Option<InstanceFunctionBody>>,
+    func_type: Rc<FuncType>,
 }
 
 impl InstanceFunction {
     pub(crate) fn new(
         source: Box<dyn InstanceFunctionSource>,
         defined_index: usize,
+        func_type: Rc<FuncType>,
     ) -> InstanceFunction {
         InstanceFunction {
             source,
             defined_index,
             cache: RefCell::new(None),
+            func_type,
         }
     }
 }
@@ -99,25 +102,12 @@ impl InstanceFunction {
 }
 
 impl Func for InstanceFunction {
-    fn params_arity(&self) -> usize {
-        let instance_data = self.instance_data();
-        let module_data = &instance_data.module_data;
-        let func_type = module_data.func_types[self.defined_index];
-        let func_type = &module_data.types[func_type as usize];
-        func_type.params.len()
-    }
-
-    fn results_arity(&self) -> usize {
-        let instance_data = self.instance_data();
-        let module_data = &instance_data.module_data;
-        let func_type = module_data.func_types[self.defined_index];
-        let func_type = &module_data.types[func_type as usize];
-        func_type.returns.len()
+    fn ty(&self) -> &Rc<FuncType> {
+        &self.func_type
     }
 
     fn call(&self, stack: &mut [Val]) -> Result<(), Trap> {
-        let params_arity = self.params_arity();
-        let results_arity = self.results_arity();
+        let ty = self.ty();
         let instance_data = self.instance_data();
         if self.cache.borrow().is_none() {
             let module_data = &instance_data.module_data;
@@ -125,8 +115,8 @@ impl Func for InstanceFunction {
             let body = InstanceFunctionBody::new(
                 module_data.clone(),
                 &body,
-                params_arity,
-                results_arity,
+                ty.params.len(),
+                ty.returns.len(),
                 &instance_data,
             );
             *self.cache.borrow_mut() = Some(body);
@@ -136,7 +126,7 @@ impl Func for InstanceFunction {
         eval(
             &instance_data,
             body.as_ref().unwrap(),
-            results_arity,
+            ty.returns.len(),
             stack,
             sp,
         )

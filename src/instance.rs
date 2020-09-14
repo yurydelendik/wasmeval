@@ -113,8 +113,9 @@ impl Instance {
 
         let source: Rc<RefCell<Weak<InstanceData>>> = Rc::new(RefCell::new(Weak::new()));
 
-        for i in 0..module_data.func_types.len() {
-            let f: InstanceFunction = InstanceFunction::new(Box::new(source.clone()), i);
+        for (i, ft) in module_data.func_types.iter().enumerate() {
+            let ty = module_data.types[*ft as usize].clone();
+            let f: InstanceFunction = InstanceFunction::new(Box::new(source.clone()), i, ty);
             funcs.push(Rc::new(f));
         }
 
@@ -191,7 +192,7 @@ impl Instance {
         // Call start
         if let Some(start_func) = module_data.start_func {
             let f = instance_data.funcs[start_func as usize].clone();
-            debug_assert!(f.params_arity() == 0 && f.results_arity() == 0);
+            debug_assert!(f.ty().params.len() == 0 && f.ty().returns.len() == 0);
             let mut stack = vec![Default::default(); 10000];
             f.call(&mut stack)?;
         }

@@ -124,7 +124,7 @@ impl EvalContext for Ctx {
     fn get_table(&self, index: u32) -> Rc<dyn Table> {
         panic!("table {}", index);
     }
-    fn get_type(&self, index: u32) -> Rc<dyn FuncType> {
+    fn get_type(&self, index: u32) -> Rc<FuncType> {
         panic!("type {}", index);
     }
 }

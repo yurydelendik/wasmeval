@@ -6,7 +6,7 @@ use self::f64 as wasm_f64;
 
 pub(crate) use bytecode::{BreakDestination, BytecodeCache, EvalSource, Operator};
 
-pub use context::{EvalContext, FuncType};
+pub use context::EvalContext;
 
 mod bytecode;
 mod context;
@@ -231,12 +231,12 @@ pub(crate) fn eval<'a>(
     macro_rules! call {
         ($f:expr) => {{
             // TODO better signature check
-            let params_len = $f.params_arity();
-            let results_len = $f.results_arity();
+            let params_len = $f.ty().params.len();
+            let returns_len = $f.ty().returns.len();
             let result = $f.call(&mut stack.stack[stack.sp - params_len..]);
             match result {
                 Ok(()) => {
-                    stack.sp = stack.sp + results_len - params_len;
+                    stack.sp = stack.sp + returns_len - params_len;
                 }
                 Err(trap) => {
                     return Err(trap);
@@ -311,10 +311,7 @@ pub(crate) fn eval<'a>(
                     Ok(None) => trap!(TrapKind::Uninitialized),
                     Err(_) => trap!(TrapKind::UndefinedElement),
                 };
-                // TODO detailed signature check
-                if f.params_arity() != ty.ty().params.len()
-                    || f.results_arity() != ty.ty().returns.len()
-                {
+                if f.ty().as_ref() != ty.as_ref() {
                     trap!(TrapKind::SignatureMismatch);
                 }
                 call!(f)
