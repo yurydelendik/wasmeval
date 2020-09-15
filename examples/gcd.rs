@@ -11,7 +11,7 @@ fn main() -> Result<(), Error> {
         .exports()
         .iter()
         .enumerate()
-        .find(|(_i, e)| *e == "gcd")
+        .find(|(_i, (e, _))| *e == "gcd")
         .expect("gcd export");
     let instance = Instance::new(&module, &[])?;
     let gcd = &instance.exports()[gcd_index];

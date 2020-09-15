@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
+use std::sync::Arc;
 
 use crate::eval::BytecodeCache;
 use crate::eval::{eval, EvalContext, EvalSource};
@@ -22,14 +23,14 @@ pub(crate) struct InstanceFunction {
     source: Box<dyn InstanceFunctionSource>,
     defined_index: usize,
     cache: RefCell<Option<InstanceFunctionBody>>,
-    func_type: Rc<FuncType>,
+    func_type: Arc<FuncType>,
 }
 
 impl InstanceFunction {
     pub(crate) fn new(
         source: Box<dyn InstanceFunctionSource>,
         defined_index: usize,
-        func_type: Rc<FuncType>,
+        func_type: Arc<FuncType>,
     ) -> InstanceFunction {
         InstanceFunction {
             source,
@@ -41,7 +42,7 @@ impl InstanceFunction {
 }
 
 struct InstanceFunctionBody {
-    _module_data: Rc<ModuleData>,
+    _module_data: Arc<ModuleData>,
     bytecode: BytecodeCache,
     locals: Vec<(u32, Val)>,
     params_arity: usize,
@@ -50,7 +51,7 @@ struct InstanceFunctionBody {
 
 impl InstanceFunctionBody {
     pub fn new(
-        module_data: Rc<ModuleData>,
+        module_data: Arc<ModuleData>,
         body: &wasmparser::FunctionBody<'static>,
         params_arity: usize,
         results_arity: usize,
@@ -102,7 +103,7 @@ impl InstanceFunction {
 }
 
 impl Func for InstanceFunction {
-    fn ty(&self) -> &Rc<FuncType> {
+    fn ty(&self) -> &Arc<FuncType> {
         &self.func_type
     }
 

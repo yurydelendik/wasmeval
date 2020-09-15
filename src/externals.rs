@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 pub use wasmparser::MemoryImmediate;
 
 use crate::values::{Trap, Val, ValType};
@@ -17,8 +18,47 @@ impl From<wasmparser::FuncType> for FuncType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Limits {
+    pub initial: u32,
+    pub maximum: Option<u32>,
+}
+
+impl From<wasmparser::ResizableLimits> for Limits {
+    fn from(l: wasmparser::ResizableLimits) -> Self {
+        Self {
+            initial: l.initial,
+            maximum: l.maximum,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MemoryType {
+    pub limits: Limits,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TableType {
+    pub element: ValType,
+    pub limits: Limits,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GlobalType {
+    pub ty: ValType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExternType {
+    Func(FuncType),
+    Memory(MemoryType),
+    Global(GlobalType),
+    Table(TableType),
+}
+
 pub trait Func {
-    fn ty(&self) -> &Rc<FuncType>;
+    fn ty(&self) -> &Arc<FuncType>;
     fn call(&self, stack: &mut [Val]) -> Result<(), Trap>;
     fn call_wrapped(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         let mut stack = vec![Default::default(); 10000];

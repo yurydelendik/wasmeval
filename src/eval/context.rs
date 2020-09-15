@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::externals::{Func, FuncType, Global, Memory, Table};
 use crate::instance::InstanceData;
@@ -8,7 +9,7 @@ pub trait EvalContext {
     fn get_global(&self, index: u32) -> Rc<dyn Global>;
     fn get_memory(&self) -> Rc<dyn Memory>;
     fn get_table(&self, index: u32) -> Rc<dyn Table>;
-    fn get_type(&self, index: u32) -> Rc<FuncType>;
+    fn get_type(&self, index: u32) -> Arc<FuncType>;
 }
 
 impl<'a> EvalContext for Rc<InstanceData> {
@@ -25,7 +26,7 @@ impl<'a> EvalContext for Rc<InstanceData> {
     fn get_table(&self, index: u32) -> Rc<dyn Table> {
         self.tables[index as usize].clone()
     }
-    fn get_type(&self, index: u32) -> Rc<FuncType> {
+    fn get_type(&self, index: u32) -> Arc<FuncType> {
         self.module_data.types[index as usize].clone()
     }
 }

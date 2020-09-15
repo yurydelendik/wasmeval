@@ -1,6 +1,7 @@
 pub use crate::eval::EvalContext;
 pub use crate::externals::{
-    External, Func, FuncType, Global, Memory, MemoryImmediate, Table, TableOutOfBounds,
+    ExternType, External, Func, FuncType, Global, GlobalType, Limits, Memory, MemoryImmediate,
+    MemoryType, Table, TableOutOfBounds, TableType,
 };
 pub use crate::instance::Instance;
 pub use crate::memory::InstanceMemory;

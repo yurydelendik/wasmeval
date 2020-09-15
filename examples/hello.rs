@@ -2,20 +2,21 @@ use anyhow::{bail, Error};
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use wasmeval::{External, Func, FuncType, Instance, Module, Trap, Val};
 
-struct Callback(Rc<FuncType>);
+struct Callback(Arc<FuncType>);
 impl Callback {
     fn new() -> Self {
-        Self(Rc::new(FuncType {
+        Self(Arc::new(FuncType {
             params: Box::new([]),
             returns: Box::new([]),
         }))
     }
 }
 impl Func for Callback {
-    fn ty(&self) -> &Rc<FuncType> {
+    fn ty(&self) -> &Arc<FuncType> {
         &self.0
     }
     fn call(&self, _stack: &mut [Val]) -> Result<(), Trap> {

@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use wasmeval::{eval, EvalContext, Func, FuncType, Global, Memory, MemoryImmediate, Table, Val};
 
@@ -124,7 +125,7 @@ impl EvalContext for Ctx {
     fn get_table(&self, index: u32) -> Rc<dyn Table> {
         panic!("table {}", index);
     }
-    fn get_type(&self, index: u32) -> Rc<FuncType> {
+    fn get_type(&self, index: u32) -> Arc<FuncType> {
         panic!("type {}", index);
     }
 }

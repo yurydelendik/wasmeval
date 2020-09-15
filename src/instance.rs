@@ -1,6 +1,7 @@
 use anyhow::{bail, Error};
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
+use std::sync::Arc;
 use wasmparser::{
     DataKind, ElementItem, ElementKind, ExternalKind, ImportSectionEntryType, InitExpr, MemoryType,
 };
@@ -15,7 +16,7 @@ use crate::table::InstanceTable;
 use crate::values::Val;
 
 pub(crate) struct InstanceData {
-    pub module_data: Rc<ModuleData>,
+    pub module_data: Arc<ModuleData>,
     pub memories: Vec<Rc<dyn Memory>>,
     pub globals: Vec<Rc<dyn Global>>,
     pub funcs: Vec<Rc<dyn Func>>,

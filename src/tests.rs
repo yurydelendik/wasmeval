@@ -21,13 +21,13 @@ fn instantiate_module<'b>(
 ) -> Result<(Instance, Module), Error> {
     let module = parse_module(module)?;
     let mut imports = Vec::new();
-    for (module_name, field) in module.imports().into_iter() {
+    for (module_name, field, _) in module.imports().into_iter() {
         let (instance, m) = context.find_instance_by_name(Some(&module_name));
         let (i, _) = m
             .exports()
             .into_iter()
             .enumerate()
-            .find(|(_, e)| *e == field)
+            .find(|(_, (e, _))| *e == field)
             .unwrap();
         imports.push(instance.exports()[i].clone());
     }
@@ -68,7 +68,7 @@ fn preform_action<'a, 'b>(
             .exports()
             .iter()
             .enumerate()
-            .find(|(_, e)| **e == field)
+            .find(|(_, (e, _))| *e == field)
             .map(|(i, _)| &instance.exports()[i])
     };
 

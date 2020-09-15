@@ -1,9 +1,22 @@
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Val {
     I32(i32),
     I64(i64),
     F32(u32),
     F64(u64),
+    Func(Option<std::sync::Arc<dyn crate::externals::Func>>),
+}
+
+impl std::fmt::Debug for Val {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Val::I32(i) => write!(f, "I32({})", i),
+            Val::I64(i) => write!(f, "I64({})", i),
+            Val::F32(u) => write!(f, "F32({:08x})", u),
+            Val::F64(u) => write!(f, "F64({:016x})", u),
+            Val::Func(_) => write!(f, "Func"),
+        }
+    }
 }
 
 impl Val {
@@ -13,6 +26,7 @@ impl Val {
             Val::I64(_) => ValType::I64,
             Val::F32(_) => ValType::F32,
             Val::F64(_) => ValType::F64,
+            Val::Func(_) => ValType::FuncRef,
         }
     }
 
@@ -61,6 +75,7 @@ pub enum ValType {
     I64,
     F32,
     F64,
+    FuncRef,
 }
 
 impl From<wasmparser::Type> for ValType {
@@ -71,6 +86,7 @@ impl From<wasmparser::Type> for ValType {
             I64 => ValType::I64,
             F32 => ValType::F32,
             F64 => ValType::F64,
+            FuncRef => ValType::FuncRef,
             _ => unimplemented!("From<wasmparser::Type>"),
         }
     }
@@ -131,5 +147,6 @@ pub fn get_default_value(ty: ValType) -> Val {
         ValType::I64 => Val::I64(0),
         ValType::F32 => Val::F32(0),
         ValType::F64 => Val::F64(0),
+        ValType::FuncRef => Val::Func(None),
     }
 }

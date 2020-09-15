@@ -21,7 +21,7 @@ fn main() -> Result<(), Error> {
             .exports()
             .iter()
             .enumerate()
-            .find(|(_i, e)| *e == name)
+            .find(|(_i, (e, _ty))| e == name)
             .expect("export");
         index
     });
