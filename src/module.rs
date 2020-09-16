@@ -6,7 +6,7 @@ use wasmparser::{
     NameSectionReader, Parser, Payload, TableType, TypeDef,
 };
 
-use crate::externals::{ExternType, FuncType};
+use crate::externals::{self, ExternType, FuncType};
 
 pub(crate) struct ModuleData {
     pub buf: Pin<Box<[u8]>>,
@@ -239,26 +239,51 @@ impl Module {
             .collect::<Vec<_>>()
     }
 
+    pub fn types<'a>(&'a self) -> impl Iterator<Item = Arc<FuncType>> + 'a {
+        self.data.types.iter().map(|ft| ft.clone())
+    }
+
+    pub fn memories<'a>(&'a self) -> impl Iterator<Item = externals::MemoryType> + 'a {
+        self.data.memories.iter().map(|m| externals::MemoryType {
+            limits: match m {
+                MemoryType::M32 { limits, .. } => limits.clone().into(),
+                _ => panic!(),
+            },
+        })
+    }
+
+    pub fn tables<'a>(&'a self) -> impl Iterator<Item = externals::TableType> + 'a {
+        self.data.tables.iter().map(|t| externals::TableType {
+            limits: t.limits.clone().into(),
+            element: t.element_type.into(),
+        })
+    }
+
+    pub fn globals<'a>(&'a self) -> impl Iterator<Item = externals::GlobalType> + 'a {
+        self.data.globals.iter().map(|g| externals::GlobalType {
+            ty: g.ty.content_type.into(),
+        })
+    }
+
     pub fn name(&self) -> Option<String> {
         self.data.module_name.clone()
     }
 
     fn from_import_type(&self, import: &ImportSectionEntryType) -> ExternType {
-        use crate::externals as ext;
         match import {
             ImportSectionEntryType::Function(index) => {
                 ExternType::Func((*self.data.types[*index as usize]).clone())
             }
-            ImportSectionEntryType::Memory(m) => ExternType::Memory(ext::MemoryType {
+            ImportSectionEntryType::Memory(m) => ExternType::Memory(externals::MemoryType {
                 limits: match m {
                     MemoryType::M32 { limits, .. } => limits.clone().into(),
                     _ => panic!(),
                 },
             }),
-            ImportSectionEntryType::Global(g) => ExternType::Global(ext::GlobalType {
+            ImportSectionEntryType::Global(g) => ExternType::Global(externals::GlobalType {
                 ty: g.content_type.into(),
             }),
-            ImportSectionEntryType::Table(t) => ExternType::Table(ext::TableType {
+            ImportSectionEntryType::Table(t) => ExternType::Table(externals::TableType {
                 limits: t.limits.clone().into(),
                 element: t.element_type.into(),
             }),
